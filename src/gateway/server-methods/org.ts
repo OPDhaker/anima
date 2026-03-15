@@ -583,4 +583,22 @@ export const orgHandlers: GatewayRequestHandlers = {
       respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
     }
   },
+
+  "boardroom.getProposal": async ({ params, respond }) => {
+    const proposalId = requireString(params, "proposalId");
+    if (!proposalId) {
+      respond(false, undefined, invalid("proposalId is required"));
+      return;
+    }
+    try {
+      const proposal = getProposal(proposalId);
+      if (!proposal) {
+        respond(false, undefined, invalid("Proposal not found"));
+        return;
+      }
+      respond(true, { proposal }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
 };
