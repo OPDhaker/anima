@@ -11,6 +11,9 @@ import {
   updateMember,
   removeMember,
   buildHierarchy,
+  createInvite,
+  joinOrg,
+  validateInvite,
 } from "../../org/store.js";
 import { ErrorCodes, errorShape } from "../protocol/index.js";
 
@@ -263,6 +266,77 @@ export const orgHandlers: GatewayRequestHandlers = {
       }
       const hierarchy = buildHierarchy(orgId);
       respond(true, { hierarchy }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  "org.createInvite": async ({ params, respond }) => {
+    const orgId = requireString(params, "orgId");
+    const passcode = requireString(params, "passcode");
+    if (!orgId || !passcode) {
+      respond(false, undefined, invalid("orgId and passcode are required"));
+      return;
+    }
+    try {
+      const role = (requireString(params, "role") as OrgRole) ?? "worker";
+      const maxUses = typeof params.maxUses === "number" ? params.maxUses : 0;
+      const expiresInMs = typeof params.expiresInMs === "number" ? params.expiresInMs : 0;
+      const invite = createInvite(orgId, "gateway", passcode, { role, maxUses, expiresInMs });
+      if (!invite) {
+        respond(false, undefined, invalid("Organization not found"));
+        return;
+      }
+      respond(true, { code: invite.code, passcode }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  "org.validateInvite": async ({ params, respond }) => {
+    const inviteCode = requireString(params, "inviteCode");
+    const passcode = requireString(params, "passcode");
+    if (!inviteCode || !passcode) {
+      respond(false, undefined, invalid("inviteCode and passcode are required"));
+      return;
+    }
+    try {
+      const result = validateInvite(inviteCode, passcode);
+      if (!result) {
+        respond(false, undefined, invalid("Invalid invite code or passcode"));
+        return;
+      }
+      respond(true, { org: result.org, role: result.role }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  "org.join": async ({ params, respond }) => {
+    const inviteCode = requireString(params, "inviteCode");
+    const passcode = requireString(params, "passcode");
+    const displayName = requireString(params, "displayName");
+    const kind = (requireString(params, "kind") as MemberKind) ?? "agent";
+    if (!inviteCode || !passcode || !displayName) {
+      respond(false, undefined, invalid("inviteCode, passcode, and displayName are required"));
+      return;
+    }
+    try {
+      const description = requireString(params, "description") ?? "";
+      const specializations = Array.isArray(params.specializations)
+        ? (params.specializations as string[])
+        : [];
+      const result = joinOrg(inviteCode, passcode, {
+        displayName,
+        kind,
+        description,
+        specializations,
+      });
+      if (!result) {
+        respond(false, undefined, invalid("Invalid invite code, passcode, or already a member"));
+        return;
+      }
+      respond(true, { org: result.org, member: result.member }, undefined);
     } catch (error) {
       respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
     }
