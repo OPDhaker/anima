@@ -13,6 +13,7 @@ import Organizations from "./pages/Organizations";
 import Sessions from "./pages/Sessions";
 import Settings from "./pages/Settings";
 import Soul from "./pages/Soul";
+import Steer from "./pages/Steer";
 import { useTheme } from "./theme";
 import { useMood } from "./useMood";
 
@@ -26,6 +27,7 @@ const navItems = [
   { path: "/org", label: "Org", icon: "$" },
   { path: "/network", label: "Network", icon: "+" },
   { path: "/jack-in", label: "Jack In", icon: "{" },
+  { path: "/steer", label: "Steer", icon: "→" },
   { path: "/settings", label: "Settings", icon: "!" },
   { path: "/journal", label: "Journal", icon: "*" },
   { path: "/freedom", label: "Freedom", icon: "^" },
@@ -124,6 +126,7 @@ export default function App(): React.ReactElement {
           <Route path="/network" element={<Network />} />
           <Route path="/jack-in" element={<JackIn />} />
           <Route path="/mcp" element={<MCP />} />
+          <Route path="/steer" element={<Steer />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/journal" element={<Journal />} />
           <Route path="/freedom" element={<Freedom />} />

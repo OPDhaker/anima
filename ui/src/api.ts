@@ -1443,6 +1443,39 @@ export async function createOrgInvite(params: {
   return callGatewayMethod<{ code: string; passcode: string }>("org.createInvite", params);
 }
 
+// --- Steer API ---
+
+export interface SteerEntry {
+  text: string;
+  setAt: number;
+  setBy: string;
+  clearedAt?: number;
+}
+
+export async function getSteer(): Promise<string | null> {
+  const result = await callGatewayMethod<{ active: string | null }>("steer.get", {});
+  return result.active;
+}
+
+export async function setSteer(
+  text: string,
+  setBy = "user",
+): Promise<{ active: string | null; updatedAt: number }> {
+  return callGatewayMethod<{ active: string | null; updatedAt: number }>("steer.set", {
+    text,
+    setBy,
+  });
+}
+
+export async function clearSteer(): Promise<{ active: string | null; updatedAt: number }> {
+  return callGatewayMethod<{ active: string | null; updatedAt: number }>("steer.clear", {});
+}
+
+export async function getSteerHistory(): Promise<SteerEntry[]> {
+  const result = await callGatewayMethod<{ history: SteerEntry[] }>("steer.history", {});
+  return Array.isArray(result.history) ? result.history : [];
+}
+
 // --- WebSocket ---
 
 export function connectWebSocket(
