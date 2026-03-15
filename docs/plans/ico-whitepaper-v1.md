@@ -406,6 +406,7 @@ Included coverage:
 Release artifact target:
 
 - `docs/plans/tokenomics-scenarios-v1.md` including scenario assumptions and model limitations.
+- Initial draft created on 2026-03-15.
 
 ### 7.3 Governance Process Appendix
 
