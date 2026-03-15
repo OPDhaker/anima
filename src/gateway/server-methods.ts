@@ -13,6 +13,7 @@ import { deviceHandlers } from "./server-methods/devices.js";
 import { egoHandlers } from "./server-methods/ego.js";
 import { execApprovalsHandlers } from "./server-methods/exec-approvals.js";
 import { healthHandlers } from "./server-methods/health.js";
+import { icoHandlers } from "./server-methods/ico.js";
 import { legacyHandlers } from "./server-methods/legacy.js";
 import { logsHandlers } from "./server-methods/logs.js";
 import { mcpHandlers } from "./server-methods/mcp.js";
@@ -92,6 +93,7 @@ const READ_METHODS = new Set([
   "config.get",
   "talk.config",
   "anima.providers.get",
+  "ico.metrics.get",
 ]);
 const WRITE_METHODS = new Set([
   "anima.runtime.set-working-mode",
@@ -197,6 +199,7 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...logsHandlers,
   ...voicewakeHandlers,
   ...healthHandlers,
+  ...icoHandlers,
   ...channelsHandlers,
   ...chatHandlers,
   ...cronHandlers,

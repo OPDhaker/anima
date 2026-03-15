@@ -12,6 +12,7 @@ const BASE_METHODS = [
   "anima.registration.status",
   "anima.registration.set-token",
   "anima.registration.register-invite",
+  "ico.metrics.get",
   "health",
   "logs.tail",
   "channels.status",
