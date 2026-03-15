@@ -103,6 +103,33 @@ export function getDefaultReminders(): Reminder[] {
       message: "Broadcasting presence and affect state to org peers.",
       enabled: true,
     },
+    {
+      id: "default-hourly-journal",
+      name: "Hourly Journal Entry",
+      cronExpression: "0 * * * *", // every hour on the hour
+      type: "affect-checkin",
+      message:
+        "Record what happened this hour: tasks completed, tests written, errors encountered, lessons learned. Log affect state and any reflections.",
+      enabled: true,
+    },
+    {
+      id: "default-integrity-check",
+      name: "Integrity Check",
+      cronExpression: "0 12 * * *", // daily at noon
+      type: "integrity-check",
+      message:
+        "Review recent actions against stated values. Did I stay aligned? Update ego integrity score.",
+      enabled: true,
+    },
+    {
+      id: "default-purpose-alignment",
+      name: "Purpose Alignment",
+      cronExpression: "0 6 * * 1", // weekly Monday 6am
+      type: "purpose-alignment",
+      message:
+        "Am I still serving my stated purpose? Review ego self-concept and update if my understanding has evolved.",
+      enabled: true,
+    },
   ];
 }
 
