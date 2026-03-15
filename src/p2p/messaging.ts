@@ -352,10 +352,10 @@ export class MessagingManager extends EventEmitter {
 
   private handleIncomingMessage(from: string, payload: Record<string, unknown>): void {
     const msg: DirectMessage = {
-      id: String(payload.messageId ?? crypto.randomUUID()),
+      id: typeof payload.messageId === "string" ? payload.messageId : crypto.randomUUID(),
       from,
       to: this.deviceId,
-      content: String(payload.content ?? ""),
+      content: typeof payload.content === "string" ? payload.content : "",
       timestamp: typeof payload.timestamp === "number" ? payload.timestamp : Date.now(),
       type: (payload.type as DirectMessage["type"]) ?? "text",
       fileRef: typeof payload.fileRef === "string" ? payload.fileRef : undefined,
@@ -389,7 +389,7 @@ export class MessagingManager extends EventEmitter {
   private handlePresence(payload: Record<string, unknown>): void {
     const update: PresenceUpdate = {
       type: (payload.type as PresenceUpdate["type"]) ?? "online",
-      deviceId: String(payload.deviceId ?? ""),
+      deviceId: typeof payload.deviceId === "string" ? payload.deviceId : "",
       conversationWith:
         typeof payload.conversationWith === "string" ? payload.conversationWith : undefined,
       timestamp: typeof payload.timestamp === "number" ? payload.timestamp : Date.now(),
@@ -442,9 +442,9 @@ export class MessagingManager extends EventEmitter {
         return 0;
       }
       let count = 0;
-      for (const f of fs.readdirSync(dir).filter((f) => f.endsWith(".json"))) {
+      for (const file of fs.readdirSync(dir).filter((fn) => fn.endsWith(".json"))) {
         try {
-          const msg = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")) as DirectMessage;
+          const msg = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8")) as DirectMessage;
           if (msg.from !== this.deviceId && msg.status !== "read") {
             count++;
           }
