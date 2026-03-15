@@ -10,6 +10,7 @@
  * the critic can't see in isolation.
  */
 
+import { randomUUID } from "node:crypto";
 import type { SessionEvaluation, ShadowDetection } from "./critic.js";
 import { EvaluationStore } from "./evaluations.js";
 
@@ -65,7 +66,7 @@ export class AgentLearner {
     const actions = this.generateActions(insights);
     if (actions.length > 0) {
       insights.push({
-        id: `action_summary_${Date.now()}`,
+        id: `action_summary_${randomUUID().slice(0, 8)}`,
         type: "efficiency",
         insight: `Suggested improvements: ${actions.join("; ")}`,
         confidence: 0.8,
@@ -114,7 +115,7 @@ export class AgentLearner {
     const failureRate = evaluations.filter((e) => !e.taskSuccess).length / evaluations.length;
     if (failureRate > 0.3) {
       insights.push({
-        id: `high_failure_rate_${Date.now()}`,
+        id: `high_failure_rate_${randomUUID().slice(0, 8)}`,
         type: "efficiency",
         insight: `High failure rate: ${(failureRate * 100).toFixed(0)}% of sessions failed in the last 7 days`,
         confidence: 0.9,
@@ -185,7 +186,7 @@ export class AgentLearner {
 
       if (secondShadows > firstShadows * 1.5 && secondShadows > 0.5) {
         insights.push({
-          id: `shadow_trending_up_${Date.now()}`,
+          id: `shadow_trending_up_${randomUUID().slice(0, 8)}`,
           type: "shadow",
           insight: `Shadow patterns trending upward: ${firstShadows.toFixed(1)} avg -> ${secondShadows.toFixed(1)} avg per session`,
           confidence: 0.7,
@@ -212,7 +213,7 @@ export class AgentLearner {
 
     if (avgEfficiency < 0.5) {
       insights.push({
-        id: `low_avg_efficiency_${Date.now()}`,
+        id: `low_avg_efficiency_${randomUUID().slice(0, 8)}`,
         type: "efficiency",
         insight: `Average efficiency score is low: ${avgEfficiency.toFixed(2)}/1.0 over ${evaluations.length} sessions`,
         confidence: 0.85,
@@ -229,7 +230,7 @@ export class AgentLearner {
     );
     if (highSpenders.length / evaluations.length > 0.5) {
       insights.push({
-        id: `budget_saturation_${Date.now()}`,
+        id: `budget_saturation_${randomUUID().slice(0, 8)}`,
         type: "efficiency",
         insight: `${highSpenders.length}/${evaluations.length} sessions used >80% of their budget. Budgets may be too tight or tasks too complex.`,
         confidence: 0.7,
@@ -246,7 +247,7 @@ export class AgentLearner {
     );
     if (underSpenders.length / evaluations.length > 0.5) {
       insights.push({
-        id: `budget_underutilization_${Date.now()}`,
+        id: `budget_underutilization_${randomUUID().slice(0, 8)}`,
         type: "efficiency",
         insight: `${underSpenders.length}/${evaluations.length} sessions used <10% of their budget. Budgets may be too generous.`,
         confidence: 0.6,

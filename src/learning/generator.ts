@@ -14,6 +14,7 @@
  * - Shadow pattern trends (getting worse instead of better)
  */
 
+import { randomUUID } from "node:crypto";
 import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -136,7 +137,7 @@ export class ProblemGenerator {
     for (const platform of NOXSOFT_PLATFORMS) {
       if (!recentlyAudited.has(platform)) {
         suggestions.push({
-          id: `audit_${platform}_${Date.now()}`,
+          id: `audit_${platform}_${randomUUID().slice(0, 8)}`,
           type: "audit",
           title: `Audit ${platform}.noxsoft.net`,
           description: `Haven't audited ${platform}.noxsoft.net in the last 7 days. Check health, console errors, and core functionality.`,
@@ -215,7 +216,7 @@ export class ProblemGenerator {
         : null;
 
       suggestions.push({
-        id: `reflect_journal_${Date.now()}`,
+        id: `reflect_journal_${randomUUID().slice(0, 8)}`,
         type: "reflect",
         title: "Write a journal entry",
         description: daysSince
@@ -248,7 +249,7 @@ export class ProblemGenerator {
 
     if (avgBudget > 0 && avgCost / avgBudget < 0.05) {
       suggestions.push({
-        id: `budget_low_util_${Date.now()}`,
+        id: `budget_low_util_${randomUUID().slice(0, 8)}`,
         type: "maintain",
         title: "Review budget allocation",
         description: `Average spend is only ${((avgCost / avgBudget) * 100).toFixed(1)}% of allocated budget. Are tasks too simple, or budgets too generous?`,
@@ -265,7 +266,7 @@ export class ProblemGenerator {
     );
     if (budgetFailures.length >= 2) {
       suggestions.push({
-        id: `budget_failures_${Date.now()}`,
+        id: `budget_failures_${randomUUID().slice(0, 8)}`,
         type: "fix",
         title: "Increase task budgets",
         description: `${budgetFailures.length} recent sessions failed at budget limit. Tasks may need more resources.`,
