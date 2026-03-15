@@ -92,7 +92,8 @@ async function stripeRequest<T>(
   const data = (await res.json()) as Record<string, unknown>;
 
   if (!res.ok) {
-    const errMsg = String((data.error as Record<string, unknown>)?.message ?? res.statusText);
+    const rawError = (data.error as Record<string, unknown>)?.message;
+    const errMsg = typeof rawError === "string" ? rawError : res.statusText;
     throw new Error(`Stripe API error (${res.status}): ${errMsg}`);
   }
 
