@@ -86,6 +86,13 @@ type DesktopControlSessionControls = {
   maxRequests: number;
 };
 
+type DesktopControlSessionRiskLevel = "standard" | "elevated";
+
+type DesktopControlSessionRisk = {
+  level: DesktopControlSessionRiskLevel;
+  reasons: string[];
+};
+
 type DesktopControlSessionState = "pending_approval" | "active" | "denied" | "closed" | "expired";
 
 type DesktopControlSessionRoute =
@@ -133,6 +140,7 @@ type DesktopControlSessionRecord = {
   route: DesktopControlSessionRoute;
   approval: DesktopControlSessionApproval;
   controls: DesktopControlSessionControls;
+  risk: DesktopControlSessionRisk;
   requestCount: number;
   lastRequestAtMs: number | null;
   closedAtMs: number | null;
@@ -148,6 +156,7 @@ type DesktopControlSessionSnapshot = {
   route: DesktopControlSessionRoute;
   approval: DesktopControlSessionApproval;
   controls: DesktopControlSessionControls;
+  risk: DesktopControlSessionRisk;
   requestCount: number;
   lastRequestAtMs: number | null;
   closedAtMs: number | null;
@@ -399,6 +408,25 @@ function normalizeDesktopSessionMaxRequests(input: unknown): number {
   );
 }
 
+function resolveDesktopSessionRisk(
+  controls: DesktopControlSessionControls,
+): DesktopControlSessionRisk {
+  const reasons: string[] = [];
+  const hasWriteMethod = controls.allowMethods.some((method) => method !== "GET");
+  if (hasWriteMethod) {
+    reasons.push("write methods enabled (POST/DELETE)");
+  }
+  if (controls.maxRequests > DESKTOP_CONTROL_DEFAULT_MAX_REQUESTS) {
+    reasons.push(
+      `request budget exceeds standard (${controls.maxRequests} > ${DESKTOP_CONTROL_DEFAULT_MAX_REQUESTS})`,
+    );
+  }
+  return {
+    level: reasons.length > 0 ? "elevated" : "standard",
+    reasons,
+  };
+}
+
 function appendDesktopControlAudit(
   session: DesktopControlSessionRecord,
   event: Omit<DesktopControlAuditEvent, "id" | "ts"> & { ts?: number },
@@ -434,6 +462,10 @@ function toDesktopControlSessionSnapshot(
     controls: {
       allowMethods: [...session.controls.allowMethods],
       maxRequests: session.controls.maxRequests,
+    },
+    risk: {
+      level: session.risk.level,
+      reasons: [...session.risk.reasons],
     },
     requestCount: session.requestCount,
     lastRequestAtMs: session.lastRequestAtMs,
@@ -803,6 +835,10 @@ export const browserHandlers: GatewayRequestHandlers = {
     const ttlMs = normalizeDesktopSessionTtl(typed.ttlMs);
     const allowMethods = normalizeDesktopSessionAllowMethods(typed.allowMethods);
     const maxRequests = normalizeDesktopSessionMaxRequests(typed.maxRequests);
+    const risk = resolveDesktopSessionRisk({
+      allowMethods,
+      maxRequests,
+    });
     const now = Date.now();
     const actor = resolveClientActor(client);
 
@@ -870,6 +906,7 @@ export const browserHandlers: GatewayRequestHandlers = {
         allowMethods,
         maxRequests,
       },
+      risk,
       requestCount: 0,
       lastRequestAtMs: null,
       closedAtMs: null,
@@ -885,6 +922,8 @@ export const browserHandlers: GatewayRequestHandlers = {
         expiresAtMs: session.expiresAtMs,
         allowMethods: session.controls.allowMethods,
         maxRequests: session.controls.maxRequests,
+        riskLevel: session.risk.level,
+        riskReasons: session.risk.reasons,
       },
     });
     desktopControlSessions.set(id, session);
@@ -963,13 +1002,30 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
+    const note = typeof typed.note === "string" && typed.note.trim() ? typed.note.trim() : null;
+    if (decisionRaw === "allow" && session.risk.level === "elevated" && !note) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          "note is required when approving elevated-risk desktop control sessions",
+          {
+            details: {
+              riskLevel: session.risk.level,
+              riskReasons: session.risk.reasons,
+            },
+          },
+        ),
+      );
+      return;
+    }
     const actor = resolveClientActor(client);
     const now = Date.now();
     session.approval.decision = decisionRaw;
     session.approval.decidedAtMs = now;
     session.approval.decidedBy = actor;
-    session.approval.note =
-      typeof typed.note === "string" && typed.note.trim() ? typed.note.trim() : null;
+    session.approval.note = note;
     session.state = decisionRaw === "allow" ? "active" : "denied";
     if (session.state === "denied") {
       session.closedAtMs = now;

@@ -100,11 +100,14 @@ describe("desktop control session handlers", () => {
       state: string;
       route: { kind: string; node: unknown };
       approval: { decision: string };
+      risk: { level: string; reasons: string[] };
     };
     expect(payload.state).toBe("pending_approval");
     expect(payload.route.kind).toBe("local");
     expect(payload.route.node).toBeNull();
     expect(payload.approval.decision).toBe("pending");
+    expect(payload.risk.level).toBe("standard");
+    expect(payload.risk.reasons).toEqual([]);
   });
 
   it("requires approvals scope to resolve a pending session", async () => {
@@ -145,6 +148,61 @@ describe("desktop control session handlers", () => {
 
     expect(requested.response.ok).toBe(false);
     expect(requested.response.error?.message).toContain("session is not approved");
+  });
+
+  it("requires an approval note for elevated-risk sessions", async () => {
+    const browserNode = createNode({
+      nodeId: "desktop-risk",
+      displayName: "Desktop Risk",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "allow write operations",
+        nodeId: "desktop-risk",
+        allowMethods: ["GET", "POST"],
+      },
+      nodes: [browserNode],
+    });
+    const createdPayload = created.response.payload as {
+      id: string;
+      risk: { level: string; reasons: string[] };
+    };
+    expect(createdPayload.risk.level).toBe("elevated");
+    expect(createdPayload.risk.reasons).toContain("write methods enabled (POST/DELETE)");
+
+    const missingNote = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [browserNode],
+    });
+    expect(missingNote.response.ok).toBe(false);
+    expect(missingNote.response.error?.message).toContain("note is required");
+
+    const approved = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+        note: "Write access is needed for this troubleshooting window.",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [browserNode],
+    });
+    expect(approved.response.ok).toBe(true);
+    const approvedPayload = approved.response.payload as {
+      state: string;
+      approval: { note: string | null };
+    };
+    expect(approvedPayload.state).toBe("active");
+    expect(approvedPayload.approval.note).toContain("Write access is needed");
   });
 
   it("routes approved requests through the pinned browser node", async () => {
