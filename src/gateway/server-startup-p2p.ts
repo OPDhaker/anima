@@ -16,7 +16,9 @@ import path from "node:path";
 import type { ChannelBridge } from "../channels/bridge.js";
 import { AffectCoordinator } from "../affect/coordination.js";
 import { formatAffect, type AffectState } from "../affect/display.js";
+import { logAffect } from "../affect/journal.js";
 import { ensureDefaultReminders, listReminders, matchCron } from "../affect/reminders.js";
+import { reflect, type ReflectionInput } from "../affect/self-reflection.js";
 import { runWellbeingScan } from "../affect/wellbeing.js";
 import { AtmaFailoverManager } from "../infra/atma-failover.js";
 import { JackInManager } from "../jack-in/connector.js";
@@ -206,6 +208,47 @@ export async function startP2PSubsystem(options: {
     } catch (err) {
       log.warn(`reminder initialization failed: ${String(err)}`);
     }
+
+    // 6c. Hourly journal — record affect + self-reflection every hour
+    let hourlySessionCommits = 0;
+    let hourlySessionTests = 0;
+    let hourlySessionErrors: string[] = [];
+    setInterval(
+      () => {
+        try {
+          // Log current affect state
+          logAffect(BOOT_AFFECT, {
+            context: "Hourly automated journal entry",
+            trigger: "cron:hourly",
+          });
+
+          // Run self-reflection on the hour's work
+          const reflectionInput: ReflectionInput = {
+            taskDescription: "Hourly autonomous work session",
+            durationMs: 60 * 60 * 1000,
+            commitCount: hourlySessionCommits,
+            testsWritten: hourlySessionTests,
+            testsPassing: hourlySessionTests,
+            errorsEncountered: hourlySessionErrors,
+            filesModified: [],
+            completed: true,
+          };
+          const reflection = reflect(reflectionInput);
+          log.info(
+            `hourly reflection: quality=${reflection.qualityScore.toFixed(2)} strengths=${reflection.strengths.length}`,
+          );
+
+          // Reset counters for next hour
+          hourlySessionCommits = 0;
+          hourlySessionTests = 0;
+          hourlySessionErrors = [];
+        } catch (err) {
+          log.warn(`hourly journal failed: ${String(err)}`);
+        }
+      },
+      60 * 60 * 1000,
+    ); // every hour
+    log.info("hourly journal cron active — affect + self-reflection every 60m");
 
     // 7. Set up sibling greeting
     const display = formatAffect(BOOT_AFFECT);
