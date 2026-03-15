@@ -495,6 +495,7 @@ Release artifact target:
 - `docs/plans/ico-litepaper-v1.md` (initial draft created on 2026-03-15).
 - `docs/marketing/ico-launch-page-copy-v1.md` (web-ready copy blocks + real/state-aware metric rules; initial draft created on 2026-03-15).
 - `docs/marketing/ico-metrics-implementation-spec-v1.md` (canonical API/data/state contract for cross-site metrics; initial draft created on 2026-03-15).
+- `docs/plans/ico-launchpad-selection-v1.md` (launchpad options + recommendation memo; initial draft created on 2026-03-15).
 
 ---
 
@@ -502,5 +503,6 @@ Release artifact target:
 
 - Implement launch-page copy blocks in frontend surfaces with source-bound metrics and state badges (`live`, `delayed`, `stale`, `unavailable`).
 - Implement `docs/marketing/ico-metrics-implementation-spec-v1.md` in frontend/API surfaces to ensure shared metric IDs and state behavior across homepage, launch page, and status pages.
+- Execute the selected launch path from `docs/plans/ico-launchpad-selection-v1.md` and treat Anima native launch platform as the default until explicitly reprioritized.
 - Add metric tables and launch-readiness criteria per roadmap phase.
 - Align legal/compliance wording with final counsel review packet and counsel-approved disclaimer text.
