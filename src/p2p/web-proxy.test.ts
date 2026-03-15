@@ -3,7 +3,7 @@
  */
 
 import http from "node:http";
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { WebProxy, type WebProxyConfig } from "./web-proxy.js";
 
 vi.mock("../logging/subsystem.js", () => {
