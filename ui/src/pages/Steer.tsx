@@ -26,7 +26,7 @@ export default function Steer(): React.ReactElement {
   }, []);
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh]);
 
   const handleSet = async () => {
