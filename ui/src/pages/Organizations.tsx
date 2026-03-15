@@ -1595,8 +1595,6 @@ export default function Organizations(): React.ReactElement {
   const [hierarchy, setHierarchy] = useState<OrgHierarchyNode[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"tree" | "list" | "settings" | "boardroom">("tree");
-  const [sessions, setSessions] = useState<BoardroomSession[]>([]);
-  const [proposals, setProposals] = useState<BoardroomProposal[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
