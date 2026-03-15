@@ -171,6 +171,7 @@ Buttons:
 - Use the same metric IDs and state labels on every surface to prevent drift.
 - Show `last updated` timestamps for each metric tile.
 - Link every proof-strip item to a public artifact URL.
+- Build against `docs/marketing/ico-metrics-implementation-spec-v1.md` as the canonical metric/state contract.
 
 ---
 

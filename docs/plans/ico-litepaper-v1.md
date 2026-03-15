@@ -121,6 +121,7 @@ Current live execution artifacts:
 
 - Whitepaper v1: `docs/plans/ico-whitepaper-v1.md`
 - Tokenomics scenarios: `docs/plans/tokenomics-scenarios-v1.md`
+- Public metrics implementation spec: `docs/marketing/ico-metrics-implementation-spec-v1.md`
 - Technical appendix: `docs/architecture/agent-platform-topology.md`
 - Governance appendix: `docs/governance/proposal-lifecycle-v1.md`
 - Security appendix: `docs/security/ico-threat-model-v1.md`, `docs/security/incident-response-v1.md`
@@ -131,5 +132,6 @@ Current live execution artifacts:
 ## 9. Next Update Targets
 
 - Converted this one-pager into web-ready copy blocks in `docs/marketing/ico-launch-page-copy-v1.md` (hero, proof strip, metrics wall with state handling, roadmap, CTA rail).
+- Added canonical cross-site metric/state contract in `docs/marketing/ico-metrics-implementation-spec-v1.md`.
 - Align wording with final legal/compliance language once counsel-reviewed terms are locked.
-- Attach verifiable metric snapshots to the homepage impact module.
+- Implement feed + UI integration so homepage impact module renders verifiable live metrics with explicit state labels.
