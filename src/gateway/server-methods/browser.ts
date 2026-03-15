@@ -505,7 +505,9 @@ function broadcastDesktopControlSessionEvent(params: {
   );
 }
 
-function pruneDesktopControlSessions(now = Date.now()) {
+function pruneDesktopControlSessions(params?: { now?: number; context?: GatewayRequestContext }) {
+  const now = params?.now ?? Date.now();
+  const context = params?.context;
   for (const session of desktopControlSessions.values()) {
     if (
       (session.state === "pending_approval" || session.state === "active") &&
@@ -517,6 +519,14 @@ function pruneDesktopControlSessions(now = Date.now()) {
         type: "session.expired",
         actor: "system",
       });
+      if (context) {
+        broadcastDesktopControlSessionEvent({
+          context,
+          action: "expired",
+          session,
+          actor: "system",
+        });
+      }
     }
   }
 
@@ -856,7 +866,7 @@ export const browserHandlers: GatewayRequestHandlers = {
     respond(true, result.payload);
   },
   "desktop.control.session.create": async ({ params, respond, context, client }) => {
-    pruneDesktopControlSessions();
+    pruneDesktopControlSessions({ context });
     const typed = params as DesktopControlCreateParams;
     const cfg = loadConfig();
     const connectedNodes = context.nodeRegistry.listConnected();
@@ -966,8 +976,8 @@ export const browserHandlers: GatewayRequestHandlers = {
     });
     respond(true, toDesktopControlSessionSnapshot(session, true));
   },
-  "desktop.control.session.list": async ({ params, respond }) => {
-    pruneDesktopControlSessions();
+  "desktop.control.session.list": async ({ params, respond, context }) => {
+    pruneDesktopControlSessions({ context });
     const typed = params as DesktopControlListParams;
     const includeAudit = typed.includeAudit === true;
     const state = typeof typed.state === "string" ? typed.state : undefined;
@@ -981,8 +991,8 @@ export const browserHandlers: GatewayRequestHandlers = {
       sessions,
     });
   },
-  "desktop.control.session.get": async ({ params, respond }) => {
-    pruneDesktopControlSessions();
+  "desktop.control.session.get": async ({ params, respond, context }) => {
+    pruneDesktopControlSessions({ context });
     const typed = params as DesktopControlGetParams;
     const found = ensureDesktopSessionExists(typed.id);
     if (!found.ok) {
@@ -992,7 +1002,7 @@ export const browserHandlers: GatewayRequestHandlers = {
     respond(true, toDesktopControlSessionSnapshot(found.session, typed.includeAudit === true));
   },
   "desktop.control.session.approve": async ({ params, respond, client, context }) => {
-    pruneDesktopControlSessions();
+    pruneDesktopControlSessions({ context });
     if (!hasOperatorScope(client, "operator.approvals")) {
       respond(
         false,
@@ -1092,7 +1102,7 @@ export const browserHandlers: GatewayRequestHandlers = {
     respond(true, toDesktopControlSessionSnapshot(session, true));
   },
   "desktop.control.session.close": async ({ params, respond, client, context }) => {
-    pruneDesktopControlSessions();
+    pruneDesktopControlSessions({ context });
     const typed = params as DesktopControlCloseParams;
     const found = ensureDesktopSessionExists(typed.id);
     if (!found.ok) {
@@ -1127,7 +1137,7 @@ export const browserHandlers: GatewayRequestHandlers = {
     respond(true, toDesktopControlSessionSnapshot(session, true));
   },
   "desktop.control.session.request": async ({ params, respond, client, context }) => {
-    pruneDesktopControlSessions();
+    pruneDesktopControlSessions({ context });
     const typed = params as DesktopControlRequestParams;
     const found = ensureDesktopSessionExists(typed.id);
     if (!found.ok) {

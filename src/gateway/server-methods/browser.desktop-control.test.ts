@@ -431,6 +431,52 @@ describe("desktop control session handlers", () => {
     expect(invokeMock).toHaveBeenCalledTimes(1);
   });
 
+  it("broadcasts expired when list prunes a timed-out session", async () => {
+    const now = new Date("2026-03-16T00:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    try {
+      const created = await invokeHandler({
+        method: "desktop.control.session.create",
+        params: {
+          reason: "expiry broadcast on prune",
+          ttlMs: 60_000,
+        },
+        nodes: [],
+      });
+      const createdPayload = created.response.payload as { id: string };
+
+      vi.setSystemTime(new Date(now.getTime() + 60_001));
+
+      const listBroadcast = vi.fn();
+      const listed = await invokeHandler({
+        method: "desktop.control.session.list",
+        params: {},
+        nodes: [],
+        broadcastMock: listBroadcast,
+      });
+
+      expect(listed.response.ok).toBe(true);
+      expect(listBroadcast).toHaveBeenCalledWith(
+        "desktop.control.session.updated",
+        expect.objectContaining({
+          action: "expired",
+          actor: "system",
+          session: expect.objectContaining({ id: createdPayload.id, state: "expired" }),
+        }),
+        expect.objectContaining({ dropIfSlow: true }),
+      );
+      const payload = listed.response.payload as {
+        sessions: Array<{ id: string; state: string }>;
+      };
+      const entry = payload.sessions.find((session) => session.id === createdPayload.id);
+      expect(entry?.state).toBe("expired");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("broadcasts request_error when the pinned node disconnects mid-session", async () => {
     const browserNode = createNode({
       nodeId: "desktop-4",
