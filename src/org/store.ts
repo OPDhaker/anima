@@ -31,8 +31,17 @@ function resolveOrgDir(): string {
   return path.join(resolveStateDir(), "org");
 }
 
+/** Sanitize an ID to prevent path traversal (allow alphanumeric, hyphens only) */
+function sanitizeOrgId(id: string): string {
+  const cleaned = id.replace(/[^a-zA-Z0-9-]/g, "");
+  if (!cleaned || cleaned !== id) {
+    throw new Error(`Invalid org ID: contains disallowed characters`);
+  }
+  return cleaned;
+}
+
 function resolveOrgFile(orgId: string): string {
-  return path.join(resolveOrgDir(), `${orgId}.json`);
+  return path.join(resolveOrgDir(), `${sanitizeOrgId(orgId)}.json`);
 }
 
 // ---------------------------------------------------------------------------
