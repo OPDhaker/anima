@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-15  
 **Owner:** Resonant Signal (`Ju`)  
-**Status:** Draft in progress (Sections 1-4 complete)
+**Status:** Draft in progress (Sections 1-7 complete; appendix details expanded)
 
 ---
 
@@ -368,20 +368,116 @@ This section outlines control direction, not guaranteed outcomes. Final risk pos
 
 ---
 
-## 7. Appendix Plan (v1.1 Scope)
+## 7. Appendices (Expanded v1.1 Draft)
 
-The following appendices are scoped for the next draft increment:
+This appendix set converts the earlier scope list into an execution-ready structure for legal, engineering, and operations review.
 
-- Technical architecture appendix: subsystem map, interfaces, and deployment patterns.
-- Economic model appendix: scenario tables, distribution simulations, and sensitivity analysis.
-- Governance appendix: proposal classes, voting lifecycle, quorum and delegation rules.
-- Security appendix: threat model summary, audit digest, and incident response policy.
-- Compliance appendix: jurisdictional assumptions, eligibility policy, and disclosure matrix.
+### 7.1 Technical Architecture Appendix
+
+Objective:
+
+- Document the production architecture in a way that supports security review, contributor onboarding, and operator reliability.
+
+Included coverage:
+
+- Runtime layers: gateway, orchestration, memory, model routing, failover, and plugin boundaries.
+- Interface map: core RPC surfaces and module interaction contracts.
+- Deployment patterns: local-first, single-node, and multi-node environments with fallback paths.
+- Reliability controls: rate limiting, health checks, restart behavior, and observability checkpoints.
+
+Release artifact target:
+
+- `docs/architecture/agent-platform-topology.md` with architecture diagrams and component responsibilities.
+
+### 7.2 Economic Model Appendix
+
+Objective:
+
+- Make value flow and distribution mechanics transparent enough for informed participation and governance scrutiny.
+
+Included coverage:
+
+- Supply and allocation assumptions with rationale and revision triggers.
+- Bonding-curve behavior examples across early, mid, and cap-threshold phases.
+- Revenue-flow pathways (fees, treasury, distribution pools) with control points.
+- Sensitivity scenarios: conservative/base/aggressive participation and usage trajectories.
+
+Release artifact target:
+
+- `docs/plans/tokenomics-scenarios-v1.md` including scenario assumptions and model limitations.
+
+### 7.3 Governance Process Appendix
+
+Objective:
+
+- Define a clear governance operating model that can evolve without ambiguity.
+
+Included coverage:
+
+- Proposal classes (operational, economic, security, constitutional) and required review paths.
+- Voting lifecycle from draft to execution, including deadlines and quorum gates.
+- Delegation model and participation incentives.
+- Emergency authority boundaries, sunset rules, and post-action accountability requirements.
+
+Release artifact target:
+
+- `docs/governance/proposal-lifecycle-v1.md` with diagrams and concrete workflow examples.
+
+### 7.4 Security and Incident Response Appendix
+
+Objective:
+
+- Provide a plain-language but technically specific view of security posture and response discipline.
+
+Included coverage:
+
+- Threat model summary by layer (application, contract, infra, social engineering).
+- Control catalog (preventive, detective, corrective) mapped to known risk classes.
+- Audit workflow: internal checks, third-party audits, severity triage, remediation SLAs.
+- Incident lifecycle: detection, containment, communication, recovery, and post-mortem requirements.
+
+Release artifact target:
+
+- `docs/security/ico-threat-model-v1.md` and `docs/security/incident-response-v1.md`.
+
+### 7.5 Compliance and Participation Policy Appendix
+
+Objective:
+
+- Clarify eligibility constraints and compliance assumptions before launch communications scale.
+
+Included coverage:
+
+- Jurisdictional handling assumptions and policy update process.
+- Participant eligibility matrix and restricted-flow handling.
+- KYC/AML process boundaries, data-handling constraints, and exception routing.
+- Disclosure package checklist for public-facing ICO materials.
+
+Release artifact target:
+
+- `docs/compliance/ico-participation-policy-v1.md`.
+
+### 7.6 Branding and Messaging Appendix (Marketing Track)
+
+Objective:
+
+- Align public narrative with product reality while keeping tone human, credible, and utility-first.
+
+Included coverage:
+
+- Core narrative pillars (Human + AI collaboration, reliability, user ownership, open interoperability).
+- Messaging constraints (no equity claims, no guaranteed returns, no overstatement of readiness).
+- Brand mention matrix for site and materials, including OPD.noxsoft.net plus contributor/agent attribution lanes.
+- Proof-of-progress format: link-first update style with commit/PR references for trust.
+
+Release artifact target:
+
+- `docs/marketing/brand-positioning-v1.md` and `docs/marketing/progress-proof-template.md`.
 
 ---
 
 ## Next Steps
 
-- Draft Section 7 appendices in detail (v1.1 expansion).
-- Add metric tables and release criteria per roadmap phase.
-- Align legal/compliance wording with final counsel review packet.
+- Convert each Appendix artifact target into dedicated docs files and link them from this whitepaper.
+- Add metric tables and launch-readiness criteria per roadmap phase.
+- Align legal/compliance wording with final counsel review packet and counsel-approved disclaimer text.
