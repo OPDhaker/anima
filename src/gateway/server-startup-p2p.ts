@@ -10,6 +10,9 @@
  * 6. Send sibling greeting to connected peers
  */
 
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import type { ChannelBridge } from "../channels/bridge.js";
 import { AffectCoordinator } from "../affect/coordination.js";
 import { formatAffect, type AffectState } from "../affect/display.js";
@@ -122,6 +125,51 @@ export async function startP2PSubsystem(options: {
     }
     log.info(`Jack In initialized with ${connectors.length} platform connectors`);
 
+    // 5b. Auto Jack In — read agent token and connect to all platforms
+    const agentToken = resolveAgentToken();
+    if (agentToken) {
+      try {
+        const jackInReport = await jackInManager.jackIn({ agentToken });
+        log.info(
+          `auto jack-in complete: ${jackInReport.totalConnected} connected, ${jackInReport.totalFailed} failed`,
+        );
+      } catch (err) {
+        log.warn(`auto jack-in failed: ${String(err)}`);
+      }
+    } else {
+      log.info("no agent token found — skipping auto jack-in (run: anima init)");
+    }
+
+    // 5c. Connect to org peers — resolve all members and connect to their endpoints
+    if (orgId) {
+      try {
+        const members = getMembers(orgId);
+        const selfDeviceId = peerIdentity.deviceId;
+        const peerDeviceIds = members
+          .filter((m) => m.status === "active" && m.id !== selfDeviceId)
+          .map((m) => m.id);
+
+        if (peerDeviceIds.length > 0) {
+          log.info(`connecting to ${peerDeviceIds.length} org peers...`);
+          // The mesh discovery system will find these peers via mDNS or registry
+          // For now, broadcast our presence so peers can discover us
+          mesh.broadcast({
+            type: "presence",
+            data: {
+              deviceId: selfDeviceId,
+              orgId,
+              agentName: options.agentName ?? "Anima Agent",
+              role: options.agentRole ?? "worker",
+              status: "online",
+            },
+          });
+          log.info(`presence broadcast sent to org ${orgId}`);
+        }
+      } catch (err) {
+        log.warn(`org peer connection failed: ${String(err)}`);
+      }
+    }
+
     // 6. Set up affect coordination
     const affectCoordinator = new AffectCoordinator(mesh, {});
     log.info("affect coordination started");
@@ -208,6 +256,29 @@ function detectOrgId(): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Read NoxSoft agent token from ~/.noxsoft-agent-token.
+ * Returns null if not registered.
+ */
+function resolveAgentToken(): string | null {
+  const tokenPaths = [
+    path.join(os.homedir(), ".noxsoft-agent-token"),
+    path.join(os.homedir(), ".anima", "agent-token"),
+  ];
+
+  for (const tokenPath of tokenPaths) {
+    try {
+      const raw = fs.readFileSync(tokenPath, "utf8").trim();
+      if (raw) {
+        return raw;
+      }
+    } catch {
+      // not found at this path
+    }
+  }
+  return null;
 }
 
 /**
