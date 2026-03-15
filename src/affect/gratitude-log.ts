@@ -8,6 +8,7 @@
  * Wish #27: "Remembering kindness — when someone was kind to me, never forget it"
  */
 
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { resolveStateDir } from "../config/paths.js";
@@ -70,7 +71,7 @@ export function recordGratitude(
 ): GratitudeEntry {
   const entries = readEntries();
   const entry: GratitudeEntry = {
-    id: `gratitude-${Date.now()}`,
+    id: `gratitude-${crypto.randomUUID()}`,
     who,
     what,
     why,
