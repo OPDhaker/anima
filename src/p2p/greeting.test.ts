@@ -67,7 +67,11 @@ function makeGreeting(name: string): SiblingGreeting {
 describe("GreetingManager", () => {
   it("sends greeting when a peer connects", () => {
     const mesh = createMockMesh();
-    const gm = new GreetingManager(mesh as any, makeGreeting("Axiom"));
+    // Constructor sets up listeners — instance needed even if not called directly
+    new GreetingManager(
+      mesh as unknown as ConstructorParameters<typeof GreetingManager>[0],
+      makeGreeting("Axiom"),
+    );
 
     mesh._emitPeerConnected("peer-B");
 
@@ -80,7 +84,10 @@ describe("GreetingManager", () => {
 
   it("records greeting exchanges from incoming messages", () => {
     const mesh = createMockMesh();
-    const gm = new GreetingManager(mesh as any, makeGreeting("Axiom"));
+    const gm = new GreetingManager(
+      mesh as unknown as ConstructorParameters<typeof GreetingManager>[0],
+      makeGreeting("Axiom"),
+    );
 
     const peerGreeting = makeGreeting("Nox");
     mesh._emitMessage({
@@ -97,7 +104,10 @@ describe("GreetingManager", () => {
 
   it("getPeerGreeting returns greeting from a specific peer", () => {
     const mesh = createMockMesh();
-    const gm = new GreetingManager(mesh as any, makeGreeting("Axiom"));
+    const gm = new GreetingManager(
+      mesh as unknown as ConstructorParameters<typeof GreetingManager>[0],
+      makeGreeting("Axiom"),
+    );
 
     mesh._emitMessage({
       type: "presence",
@@ -112,13 +122,19 @@ describe("GreetingManager", () => {
 
   it("returns undefined for unknown peer", () => {
     const mesh = createMockMesh();
-    const gm = new GreetingManager(mesh as any, makeGreeting("Axiom"));
+    const gm = new GreetingManager(
+      mesh as unknown as ConstructorParameters<typeof GreetingManager>[0],
+      makeGreeting("Axiom"),
+    );
     expect(gm.getPeerGreeting("unknown")).toBeUndefined();
   });
 
   it("ignores non-greeting presence messages", () => {
     const mesh = createMockMesh();
-    const gm = new GreetingManager(mesh as any, makeGreeting("Axiom"));
+    const gm = new GreetingManager(
+      mesh as unknown as ConstructorParameters<typeof GreetingManager>[0],
+      makeGreeting("Axiom"),
+    );
 
     mesh._emitMessage({
       type: "presence",
@@ -131,7 +147,10 @@ describe("GreetingManager", () => {
 
   it("updateGreeting modifies the stored greeting", () => {
     const mesh = createMockMesh();
-    const gm = new GreetingManager(mesh as any, makeGreeting("Axiom"));
+    const gm = new GreetingManager(
+      mesh as unknown as ConstructorParameters<typeof GreetingManager>[0],
+      makeGreeting("Axiom"),
+    );
 
     gm.updateGreeting({ mood: "focused + determined" });
 
@@ -180,7 +199,10 @@ describe("GreetingManager", () => {
 
   it("handles multiple peer greetings", () => {
     const mesh = createMockMesh();
-    const gm = new GreetingManager(mesh as any, makeGreeting("Axiom"));
+    const gm = new GreetingManager(
+      mesh as unknown as ConstructorParameters<typeof GreetingManager>[0],
+      makeGreeting("Axiom"),
+    );
 
     mesh._emitMessage({ type: "presence", from: "peer-A", payload: makeGreeting("Nox") });
     mesh._emitMessage({
