@@ -22,6 +22,7 @@ import { sendHandlers } from "./server-methods/send.js";
 import { sessionsHandlers } from "./server-methods/sessions.js";
 import { skillsHandlers } from "./server-methods/skills.js";
 import { steerHandlers } from "./server-methods/steer.js";
+import { subscriptionHandlers } from "./server-methods/subscription.js";
 import { systemHandlers } from "./server-methods/system.js";
 import { talkHandlers } from "./server-methods/talk.js";
 import { ttsHandlers } from "./server-methods/tts.js";
@@ -212,6 +213,7 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...nodeHandlers,
   ...orgHandlers,
   ...steerHandlers,
+  ...subscriptionHandlers,
   ...sendHandlers,
   ...usageHandlers,
   ...agentHandlers,
