@@ -242,7 +242,7 @@ describe("TaskMarketplace", () => {
 
   describe("getMarketplaceStats", () => {
     it("returns correct counts", () => {
-      const t1 = postTask("Open", "desc", "agent-1");
+      postTask("Open", "desc", "agent-1");
       const t2 = postTask("Claimed", "desc", "agent-1");
       claimTask(t2.id, {
         taskId: t2.id,
@@ -261,7 +261,7 @@ describe("TaskMarketplace", () => {
   describe("TTL escalation", () => {
     it("escalates critical tasks to broadcast after 5 minutes", () => {
       vi.useFakeTimers();
-      const task = postTask("Critical bug", "desc", "agent-1", { priority: "critical" });
+      postTask("Critical bug", "desc", "agent-1", { priority: "critical" });
 
       // No escalation yet
       let escalations = checkEscalations();
@@ -316,7 +316,7 @@ describe("TaskMarketplace", () => {
     it("does NOT create files with traversal paths", () => {
       // Even though postTask generates its own ID (safe), verify writeTask path
       // is always inside the marketplace dir
-      const task = postTask("Safe task", "desc", "agent-1");
+      postTask("Safe task", "desc", "agent-1");
       const dir = path.join(TEST_DIR, "task-marketplace");
       const files = fs.readdirSync(dir);
       // All files should be in the marketplace dir, none outside
