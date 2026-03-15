@@ -14,7 +14,7 @@
 
 import { createHmac } from "node:crypto";
 import { createSubsystemLogger } from "../logging/subsystem.js";
-import { type License, type LicenseTier, TIER_LIMITS } from "./types.js";
+import { type License, type LicenseTier } from "./types.js";
 import { loadLicense, saveLicense } from "./validator.js";
 
 const log = createSubsystemLogger("stripe-checkout");
@@ -92,7 +92,7 @@ async function stripeRequest<T>(
   const data = (await res.json()) as Record<string, unknown>;
 
   if (!res.ok) {
-    const errMsg = (data.error as Record<string, unknown>)?.message ?? res.statusText;
+    const errMsg = String((data.error as Record<string, unknown>)?.message ?? res.statusText);
     throw new Error(`Stripe API error (${res.status}): ${errMsg}`);
   }
 
