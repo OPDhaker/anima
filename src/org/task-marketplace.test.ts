@@ -20,6 +20,15 @@ vi.mock("../config/paths.js", async (importOriginal) => {
   };
 });
 
+// Prevent logging subsystem from loading real config (which triggers resolveConfigPath)
+vi.mock("../logging/subsystem.js", () => {
+  const noop = () => {};
+  const logger = { info: noop, warn: noop, error: noop, debug: noop, trace: noop };
+  return {
+    createSubsystemLogger: () => logger,
+  };
+});
+
 import {
   postTask,
   claimTask,

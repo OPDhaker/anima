@@ -5,8 +5,8 @@
  * bandwidth tracking, and edge cases (max sessions, disabled relay, etc.)
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
-import { RelayManager, type RelayConfig, type RelaySession } from "./relay.js";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { RelayManager, type RelayConfig } from "./relay.js";
 
 // ---------------------------------------------------------------------------
 // Mock PeerMesh
