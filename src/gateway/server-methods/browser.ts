@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import type { NodeSession } from "../node-registry.js";
-import type { GatewayRequestHandlers } from "./types.js";
+import type { GatewayClient, GatewayRequestContext, GatewayRequestHandlers } from "./types.js";
 import {
   createBrowserControlContext,
   startBrowserControlServiceFromConfig,
@@ -54,6 +54,136 @@ export type BrowserCapabilitiesSnapshot = {
   };
   warnings: string[];
 };
+
+type NormalizedBrowserRequest = {
+  methodRaw: "GET" | "POST" | "DELETE";
+  path: string;
+  query: Record<string, unknown> | undefined;
+  body: unknown;
+  timeoutMs: number | undefined;
+};
+
+type BrowserDispatchResult =
+  | {
+      ok: true;
+      route: "local" | "node";
+      nodeId: string | null;
+      payload: unknown;
+      status: number;
+    }
+  | {
+      ok: false;
+      route: "local" | "node";
+      nodeId: string | null;
+      status: number;
+      error: ReturnType<typeof errorShape>;
+    };
+
+type DesktopControlSessionState = "pending_approval" | "active" | "denied" | "closed" | "expired";
+
+type DesktopControlSessionRoute =
+  | {
+      kind: "local";
+      node: null;
+    }
+  | {
+      kind: "node";
+      node: BrowserNodeSummary;
+    };
+
+type DesktopControlSessionApproval = {
+  required: true;
+  decision: "pending" | "allow" | "deny";
+  requestedAtMs: number;
+  requestedBy: string | null;
+  decidedAtMs: number | null;
+  decidedBy: string | null;
+  note: string | null;
+};
+
+type DesktopControlAuditEvent = {
+  id: string;
+  ts: number;
+  type:
+    | "session.created"
+    | "session.approved"
+    | "session.denied"
+    | "session.closed"
+    | "session.expired"
+    | "request.start"
+    | "request.ok"
+    | "request.error";
+  actor: string | null;
+  details?: Record<string, unknown>;
+};
+
+type DesktopControlSessionRecord = {
+  id: string;
+  reason: string;
+  createdAtMs: number;
+  expiresAtMs: number;
+  state: DesktopControlSessionState;
+  route: DesktopControlSessionRoute;
+  approval: DesktopControlSessionApproval;
+  requestCount: number;
+  lastRequestAtMs: number | null;
+  closedAtMs: number | null;
+  audit: DesktopControlAuditEvent[];
+};
+
+type DesktopControlSessionSnapshot = {
+  id: string;
+  reason: string;
+  createdAtMs: number;
+  expiresAtMs: number;
+  state: DesktopControlSessionState;
+  route: DesktopControlSessionRoute;
+  approval: DesktopControlSessionApproval;
+  requestCount: number;
+  lastRequestAtMs: number | null;
+  closedAtMs: number | null;
+  audit?: DesktopControlAuditEvent[];
+};
+
+type DesktopControlCreateParams = {
+  reason?: string;
+  ttlMs?: number;
+  nodeId?: string;
+};
+
+type DesktopControlDecisionParams = {
+  id?: string;
+  decision?: string;
+  note?: string;
+};
+
+type DesktopControlGetParams = {
+  id?: string;
+  includeAudit?: boolean;
+};
+
+type DesktopControlListParams = {
+  includeAudit?: boolean;
+  state?: DesktopControlSessionState;
+};
+
+type DesktopControlCloseParams = {
+  id?: string;
+  note?: string;
+};
+
+type DesktopControlRequestParams = BrowserRequestParams & {
+  id?: string;
+};
+
+const DESKTOP_CONTROL_DEFAULT_TTL_MS = 15 * 60 * 1000;
+const DESKTOP_CONTROL_MIN_TTL_MS = 60 * 1000;
+const DESKTOP_CONTROL_MAX_TTL_MS = 4 * 60 * 60 * 1000;
+const DESKTOP_CONTROL_MAX_REASON_LEN = 240;
+const DESKTOP_CONTROL_AUDIT_MAX_EVENTS = 200;
+const DESKTOP_CONTROL_RETENTION_MS = 2 * 60 * 60 * 1000;
+
+const desktopControlSessions = new Map<string, DesktopControlSessionRecord>();
 
 function isBrowserNode(node: NodeSession) {
   const caps = Array.isArray(node.caps) ? node.caps : [];
@@ -179,6 +309,323 @@ function resolveGatewayAuthMode(
   return "none";
 }
 
+function resolveClientActor(client: GatewayClient | null): string | null {
+  const displayName = client?.connect?.client?.displayName;
+  if (typeof displayName === "string" && displayName.trim().length > 0) {
+    return displayName.trim();
+  }
+  const clientId = client?.connect?.client?.id;
+  if (typeof clientId === "string" && clientId.trim().length > 0) {
+    return clientId.trim();
+  }
+  const deviceId = client?.connect?.device?.id;
+  if (typeof deviceId === "string" && deviceId.trim().length > 0) {
+    return deviceId.trim();
+  }
+  return null;
+}
+
+function hasOperatorScope(client: GatewayClient | null, scope: string): boolean {
+  const scopes = Array.isArray(client?.connect?.scopes) ? client?.connect?.scopes : [];
+  return scopes.includes("operator.admin") || scopes.includes(scope);
+}
+
+function normalizeDesktopSessionTtl(input: unknown): number {
+  if (typeof input !== "number" || !Number.isFinite(input)) {
+    return DESKTOP_CONTROL_DEFAULT_TTL_MS;
+  }
+  return Math.min(
+    DESKTOP_CONTROL_MAX_TTL_MS,
+    Math.max(DESKTOP_CONTROL_MIN_TTL_MS, Math.floor(input)),
+  );
+}
+
+function normalizeDesktopSessionReason(input: unknown): string {
+  if (typeof input !== "string") {
+    return "Desktop control session";
+  }
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return "Desktop control session";
+  }
+  return trimmed.slice(0, DESKTOP_CONTROL_MAX_REASON_LEN);
+}
+
+function appendDesktopControlAudit(
+  session: DesktopControlSessionRecord,
+  event: Omit<DesktopControlAuditEvent, "id" | "ts"> & { ts?: number },
+) {
+  const next: DesktopControlAuditEvent = {
+    id: crypto.randomUUID(),
+    ts: typeof event.ts === "number" && Number.isFinite(event.ts) ? event.ts : Date.now(),
+    type: event.type,
+    actor: event.actor,
+    details: event.details,
+  };
+  session.audit.push(next);
+  if (session.audit.length > DESKTOP_CONTROL_AUDIT_MAX_EVENTS) {
+    session.audit.splice(0, session.audit.length - DESKTOP_CONTROL_AUDIT_MAX_EVENTS);
+  }
+}
+
+function toDesktopControlSessionSnapshot(
+  session: DesktopControlSessionRecord,
+  includeAudit = false,
+): DesktopControlSessionSnapshot {
+  return {
+    id: session.id,
+    reason: session.reason,
+    createdAtMs: session.createdAtMs,
+    expiresAtMs: session.expiresAtMs,
+    state: session.state,
+    route:
+      session.route.kind === "node"
+        ? { kind: "node", node: { ...session.route.node } }
+        : session.route,
+    approval: { ...session.approval },
+    requestCount: session.requestCount,
+    lastRequestAtMs: session.lastRequestAtMs,
+    closedAtMs: session.closedAtMs,
+    audit: includeAudit ? session.audit.map((entry) => ({ ...entry })) : undefined,
+  };
+}
+
+function pruneDesktopControlSessions(now = Date.now()) {
+  for (const session of desktopControlSessions.values()) {
+    if (
+      (session.state === "pending_approval" || session.state === "active") &&
+      session.expiresAtMs <= now
+    ) {
+      session.state = "expired";
+      session.closedAtMs = now;
+      appendDesktopControlAudit(session, {
+        type: "session.expired",
+        actor: "system",
+      });
+    }
+  }
+
+  for (const [id, session] of desktopControlSessions.entries()) {
+    if (
+      (session.state === "closed" || session.state === "denied" || session.state === "expired") &&
+      session.closedAtMs &&
+      now - session.closedAtMs > DESKTOP_CONTROL_RETENTION_MS
+    ) {
+      desktopControlSessions.delete(id);
+    }
+  }
+}
+
+function normalizeBrowserRequest(
+  params: BrowserRequestParams,
+):
+  | { ok: true; request: NormalizedBrowserRequest }
+  | { ok: false; error: ReturnType<typeof errorShape> } {
+  const methodRaw = typeof params.method === "string" ? params.method.trim().toUpperCase() : "";
+  const path = typeof params.path === "string" ? params.path.trim() : "";
+  const query = params.query && typeof params.query === "object" ? params.query : undefined;
+  const body = params.body;
+  const timeoutMs =
+    typeof params.timeoutMs === "number" && Number.isFinite(params.timeoutMs)
+      ? Math.max(1, Math.floor(params.timeoutMs))
+      : undefined;
+
+  if (!methodRaw || !path) {
+    return {
+      ok: false,
+      error: errorShape(ErrorCodes.INVALID_REQUEST, "method and path are required"),
+    };
+  }
+  if (methodRaw !== "GET" && methodRaw !== "POST" && methodRaw !== "DELETE") {
+    return {
+      ok: false,
+      error: errorShape(ErrorCodes.INVALID_REQUEST, "method must be GET, POST, or DELETE"),
+    };
+  }
+
+  return {
+    ok: true,
+    request: {
+      methodRaw,
+      path,
+      query,
+      body,
+      timeoutMs,
+    },
+  };
+}
+
+async function dispatchBrowserRequest(params: {
+  cfg: ReturnType<typeof loadConfig>;
+  request: NormalizedBrowserRequest;
+  context: GatewayRequestContext;
+  nodeTarget: NodeSession | null;
+}): Promise<BrowserDispatchResult> {
+  const { cfg, request, context, nodeTarget } = params;
+
+  if (nodeTarget) {
+    const allowlist = resolveNodeCommandAllowlist(cfg, nodeTarget);
+    const allowed = isNodeCommandAllowed({
+      command: "browser.proxy",
+      declaredCommands: nodeTarget.commands,
+      allowlist,
+    });
+    if (!allowed.ok) {
+      return {
+        ok: false,
+        route: "node",
+        nodeId: nodeTarget.nodeId,
+        status: 403,
+        error: errorShape(ErrorCodes.INVALID_REQUEST, "node command not allowed", {
+          details: { reason: allowed.reason, command: "browser.proxy" },
+        }),
+      };
+    }
+
+    const proxyParams = {
+      method: request.methodRaw,
+      path: request.path,
+      query: request.query,
+      body: request.body,
+      timeoutMs: request.timeoutMs,
+      profile: typeof request.query?.profile === "string" ? request.query.profile : undefined,
+    };
+    const res = await context.nodeRegistry.invoke({
+      nodeId: nodeTarget.nodeId,
+      command: "browser.proxy",
+      params: proxyParams,
+      timeoutMs: request.timeoutMs,
+      idempotencyKey: crypto.randomUUID(),
+    });
+    if (!res.ok) {
+      return {
+        ok: false,
+        route: "node",
+        nodeId: nodeTarget.nodeId,
+        status: 503,
+        error: errorShape(ErrorCodes.UNAVAILABLE, res.error?.message ?? "node invoke failed", {
+          details: { nodeError: res.error ?? null },
+        }),
+      };
+    }
+
+    const payload = res.payloadJSON ? safeParseJson(res.payloadJSON) : res.payload;
+    const proxy = payload && typeof payload === "object" ? (payload as BrowserProxyResult) : null;
+    if (!proxy || !("result" in proxy)) {
+      return {
+        ok: false,
+        route: "node",
+        nodeId: nodeTarget.nodeId,
+        status: 503,
+        error: errorShape(ErrorCodes.UNAVAILABLE, "browser proxy failed"),
+      };
+    }
+    const mapping = await persistProxyFiles(proxy.files);
+    applyProxyPaths(proxy.result, mapping);
+    return {
+      ok: true,
+      route: "node",
+      nodeId: nodeTarget.nodeId,
+      status: 200,
+      payload: proxy.result,
+    };
+  }
+
+  const ready = await startBrowserControlServiceFromConfig();
+  if (!ready) {
+    return {
+      ok: false,
+      route: "local",
+      nodeId: null,
+      status: 503,
+      error: errorShape(ErrorCodes.UNAVAILABLE, "browser control is disabled"),
+    };
+  }
+
+  let dispatcher;
+  try {
+    dispatcher = createBrowserRouteDispatcher(createBrowserControlContext());
+  } catch (err) {
+    return {
+      ok: false,
+      route: "local",
+      nodeId: null,
+      status: 503,
+      error: errorShape(ErrorCodes.UNAVAILABLE, String(err)),
+    };
+  }
+
+  const result = await dispatcher.dispatch({
+    method: request.methodRaw,
+    path: request.path,
+    query: request.query,
+    body: request.body,
+  });
+
+  if (result.status >= 400) {
+    const message =
+      result.body && typeof result.body === "object" && "error" in result.body
+        ? String((result.body as { error?: unknown }).error)
+        : `browser request failed (${result.status})`;
+    const code = result.status >= 500 ? ErrorCodes.UNAVAILABLE : ErrorCodes.INVALID_REQUEST;
+    return {
+      ok: false,
+      route: "local",
+      nodeId: null,
+      status: result.status,
+      error: errorShape(code, message, { details: result.body }),
+    };
+  }
+
+  return {
+    ok: true,
+    route: "local",
+    nodeId: null,
+    status: result.status,
+    payload: result.body,
+  };
+}
+
+function resolveDesktopSessionNodeTarget(params: {
+  session: DesktopControlSessionRecord;
+  nodes: NodeSession[];
+}): NodeSession | null {
+  if (params.session.route.kind !== "node") {
+    return null;
+  }
+  return (
+    params.nodes.find(
+      (node) => node.nodeId === params.session.route.node.nodeId && isBrowserNode(node),
+    ) ?? null
+  );
+}
+
+function ensureDesktopSessionExists(
+  idRaw: unknown,
+):
+  | { ok: true; session: DesktopControlSessionRecord }
+  | { ok: false; error: ReturnType<typeof errorShape> } {
+  const id = typeof idRaw === "string" ? idRaw.trim() : "";
+  if (!id) {
+    return {
+      ok: false,
+      error: errorShape(ErrorCodes.INVALID_REQUEST, "id is required"),
+    };
+  }
+  const session = desktopControlSessions.get(id);
+  if (!session) {
+    return {
+      ok: false,
+      error: errorShape(ErrorCodes.INVALID_REQUEST, "unknown desktop control session id"),
+    };
+  }
+  return { ok: true, session };
+}
+
+export function resetDesktopControlSessionsForTests() {
+  desktopControlSessions.clear();
+}
+
 export function buildBrowserCapabilitiesSnapshot(params: {
   cfg: ReturnType<typeof loadConfig>;
   nodes: NodeSession[];
@@ -265,33 +712,11 @@ export const browserHandlers: GatewayRequestHandlers = {
     }
   },
   "browser.request": async ({ params, respond, context }) => {
-    const typed = params as BrowserRequestParams;
-    const methodRaw = typeof typed.method === "string" ? typed.method.trim().toUpperCase() : "";
-    const path = typeof typed.path === "string" ? typed.path.trim() : "";
-    const query = typed.query && typeof typed.query === "object" ? typed.query : undefined;
-    const body = typed.body;
-    const timeoutMs =
-      typeof typed.timeoutMs === "number" && Number.isFinite(typed.timeoutMs)
-        ? Math.max(1, Math.floor(typed.timeoutMs))
-        : undefined;
-
-    if (!methodRaw || !path) {
-      respond(
-        false,
-        undefined,
-        errorShape(ErrorCodes.INVALID_REQUEST, "method and path are required"),
-      );
+    const normalized = normalizeBrowserRequest(params as BrowserRequestParams);
+    if (!normalized.ok) {
+      respond(false, undefined, normalized.error);
       return;
     }
-    if (methodRaw !== "GET" && methodRaw !== "POST" && methodRaw !== "DELETE") {
-      respond(
-        false,
-        undefined,
-        errorShape(ErrorCodes.INVALID_REQUEST, "method must be GET, POST, or DELETE"),
-      );
-      return;
-    }
-
     const cfg = loadConfig();
     let nodeTarget: NodeSession | null = null;
     try {
@@ -303,93 +728,320 @@ export const browserHandlers: GatewayRequestHandlers = {
       respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(err)));
       return;
     }
-
-    if (nodeTarget) {
-      const allowlist = resolveNodeCommandAllowlist(cfg, nodeTarget);
-      const allowed = isNodeCommandAllowed({
-        command: "browser.proxy",
-        declaredCommands: nodeTarget.commands,
-        allowlist,
-      });
-      if (!allowed.ok) {
-        respond(
-          false,
-          undefined,
-          errorShape(ErrorCodes.INVALID_REQUEST, "node command not allowed", {
-            details: { reason: allowed.reason, command: "browser.proxy" },
-          }),
-        );
-        return;
-      }
-
-      const proxyParams = {
-        method: methodRaw,
-        path,
-        query,
-        body,
-        timeoutMs,
-        profile: typeof query?.profile === "string" ? query.profile : undefined,
-      };
-      const res = await context.nodeRegistry.invoke({
-        nodeId: nodeTarget.nodeId,
-        command: "browser.proxy",
-        params: proxyParams,
-        timeoutMs,
-        idempotencyKey: crypto.randomUUID(),
-      });
-      if (!res.ok) {
-        respond(
-          false,
-          undefined,
-          errorShape(ErrorCodes.UNAVAILABLE, res.error?.message ?? "node invoke failed", {
-            details: { nodeError: res.error ?? null },
-          }),
-        );
-        return;
-      }
-      const payload = res.payloadJSON ? safeParseJson(res.payloadJSON) : res.payload;
-      const proxy = payload && typeof payload === "object" ? (payload as BrowserProxyResult) : null;
-      if (!proxy || !("result" in proxy)) {
-        respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, "browser proxy failed"));
-        return;
-      }
-      const mapping = await persistProxyFiles(proxy.files);
-      applyProxyPaths(proxy.result, mapping);
-      respond(true, proxy.result);
+    const result = await dispatchBrowserRequest({
+      cfg,
+      request: normalized.request,
+      context,
+      nodeTarget,
+    });
+    if (!result.ok) {
+      respond(false, undefined, result.error);
       return;
     }
+    respond(true, result.payload);
+  },
+  "desktop.control.session.create": async ({ params, respond, context, client }) => {
+    pruneDesktopControlSessions();
+    const typed = params as DesktopControlCreateParams;
+    const cfg = loadConfig();
+    const connectedNodes = context.nodeRegistry.listConnected();
+    const browserNodes = connectedNodes.filter((node) => isBrowserNode(node));
+    const requestedNodeId = typeof typed.nodeId === "string" ? typed.nodeId.trim() : "";
+    const reason = normalizeDesktopSessionReason(typed.reason);
+    const ttlMs = normalizeDesktopSessionTtl(typed.ttlMs);
+    const now = Date.now();
+    const actor = resolveClientActor(client);
 
-    const ready = await startBrowserControlServiceFromConfig();
-    if (!ready) {
+    const snapshot = buildBrowserCapabilitiesSnapshot({
+      cfg,
+      nodes: connectedNodes,
+    });
+    if (!snapshot.browserEnabled || snapshot.routing.mode === "off") {
       respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, "browser control is disabled"));
       return;
     }
 
-    let dispatcher;
+    let routeNode: NodeSession | null = null;
     try {
-      dispatcher = createBrowserRouteDispatcher(createBrowserControlContext());
-    } catch (err) {
-      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(err)));
+      if (requestedNodeId) {
+        routeNode = resolveBrowserNode(browserNodes, requestedNodeId);
+        if (!routeNode) {
+          respond(
+            false,
+            undefined,
+            errorShape(
+              ErrorCodes.INVALID_REQUEST,
+              `requested browser node is not connected: ${requestedNodeId}`,
+            ),
+          );
+          return;
+        }
+      } else {
+        routeNode = resolveBrowserNodeTarget({
+          cfg,
+          nodes: connectedNodes,
+        });
+      }
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
       return;
     }
 
-    const result = await dispatcher.dispatch({
-      method: methodRaw,
-      path,
-      query,
-      body,
+    const id = crypto.randomUUID();
+    const session: DesktopControlSessionRecord = {
+      id,
+      reason,
+      createdAtMs: now,
+      expiresAtMs: now + ttlMs,
+      state: "pending_approval",
+      route: routeNode
+        ? {
+            kind: "node",
+            node: toNodeSummary(routeNode),
+          }
+        : {
+            kind: "local",
+            node: null,
+          },
+      approval: {
+        required: true,
+        decision: "pending",
+        requestedAtMs: now,
+        requestedBy: actor,
+        decidedAtMs: null,
+        decidedBy: null,
+        note: null,
+      },
+      requestCount: 0,
+      lastRequestAtMs: null,
+      closedAtMs: null,
+      audit: [],
+    };
+    appendDesktopControlAudit(session, {
+      type: "session.created",
+      actor,
+      details: {
+        reason: session.reason,
+        route: session.route.kind,
+        nodeId: session.route.kind === "node" ? session.route.node.nodeId : null,
+        expiresAtMs: session.expiresAtMs,
+      },
     });
-
-    if (result.status >= 400) {
-      const message =
-        result.body && typeof result.body === "object" && "error" in result.body
-          ? String((result.body as { error?: unknown }).error)
-          : `browser request failed (${result.status})`;
-      const code = result.status >= 500 ? ErrorCodes.UNAVAILABLE : ErrorCodes.INVALID_REQUEST;
-      respond(false, undefined, errorShape(code, message, { details: result.body }));
+    desktopControlSessions.set(id, session);
+    respond(true, toDesktopControlSessionSnapshot(session, true));
+  },
+  "desktop.control.session.list": async ({ params, respond }) => {
+    pruneDesktopControlSessions();
+    const typed = params as DesktopControlListParams;
+    const includeAudit = typed.includeAudit === true;
+    const state = typeof typed.state === "string" ? typed.state : undefined;
+    const sessions = Array.from(desktopControlSessions.values())
+      .filter((entry) => (state ? entry.state === state : true))
+      .toSorted((a, b) => b.createdAtMs - a.createdAtMs)
+      .map((entry) => toDesktopControlSessionSnapshot(entry, includeAudit));
+    respond(true, {
+      ts: Date.now(),
+      total: sessions.length,
+      sessions,
+    });
+  },
+  "desktop.control.session.get": async ({ params, respond }) => {
+    pruneDesktopControlSessions();
+    const typed = params as DesktopControlGetParams;
+    const found = ensureDesktopSessionExists(typed.id);
+    if (!found.ok) {
+      respond(false, undefined, found.error);
       return;
     }
-
-    respond(true, result.body);
+    respond(true, toDesktopControlSessionSnapshot(found.session, typed.includeAudit === true));
+  },
+  "desktop.control.session.approve": async ({ params, respond, client }) => {
+    pruneDesktopControlSessions();
+    if (!hasOperatorScope(client, "operator.approvals")) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "missing scope: operator.approvals"),
+      );
+      return;
+    }
+    const typed = params as DesktopControlDecisionParams;
+    const found = ensureDesktopSessionExists(typed.id);
+    if (!found.ok) {
+      respond(false, undefined, found.error);
+      return;
+    }
+    const session = found.session;
+    if (session.state !== "pending_approval") {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `session is not pending approval (state: ${session.state})`,
+        ),
+      );
+      return;
+    }
+    if (session.expiresAtMs <= Date.now()) {
+      session.state = "expired";
+      session.closedAtMs = Date.now();
+      appendDesktopControlAudit(session, {
+        type: "session.expired",
+        actor: "system",
+      });
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "session has expired"));
+      return;
+    }
+    const decisionRaw =
+      typeof typed.decision === "string" ? typed.decision.trim().toLowerCase() : "";
+    if (decisionRaw !== "allow" && decisionRaw !== "deny") {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "decision must be allow or deny"),
+      );
+      return;
+    }
+    const actor = resolveClientActor(client);
+    const now = Date.now();
+    session.approval.decision = decisionRaw;
+    session.approval.decidedAtMs = now;
+    session.approval.decidedBy = actor;
+    session.approval.note =
+      typeof typed.note === "string" && typed.note.trim() ? typed.note.trim() : null;
+    session.state = decisionRaw === "allow" ? "active" : "denied";
+    if (session.state === "denied") {
+      session.closedAtMs = now;
+    }
+    appendDesktopControlAudit(session, {
+      type: decisionRaw === "allow" ? "session.approved" : "session.denied",
+      actor,
+      details: {
+        note: session.approval.note,
+      },
+    });
+    respond(true, toDesktopControlSessionSnapshot(session, true));
+  },
+  "desktop.control.session.close": async ({ params, respond, client }) => {
+    pruneDesktopControlSessions();
+    const typed = params as DesktopControlCloseParams;
+    const found = ensureDesktopSessionExists(typed.id);
+    if (!found.ok) {
+      respond(false, undefined, found.error);
+      return;
+    }
+    const session = found.session;
+    if (session.state === "closed") {
+      respond(true, toDesktopControlSessionSnapshot(session, true));
+      return;
+    }
+    const now = Date.now();
+    session.state = "closed";
+    session.closedAtMs = now;
+    const note = typeof typed.note === "string" && typed.note.trim() ? typed.note.trim() : null;
+    appendDesktopControlAudit(session, {
+      type: "session.closed",
+      actor: resolveClientActor(client),
+      details: {
+        note,
+      },
+    });
+    respond(true, toDesktopControlSessionSnapshot(session, true));
+  },
+  "desktop.control.session.request": async ({ params, respond, client, context }) => {
+    pruneDesktopControlSessions();
+    const typed = params as DesktopControlRequestParams;
+    const found = ensureDesktopSessionExists(typed.id);
+    if (!found.ok) {
+      respond(false, undefined, found.error);
+      return;
+    }
+    const session = found.session;
+    if (session.state !== "active" || session.approval.decision !== "allow") {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "session is not approved"));
+      return;
+    }
+    if (session.expiresAtMs <= Date.now()) {
+      session.state = "expired";
+      session.closedAtMs = Date.now();
+      appendDesktopControlAudit(session, {
+        type: "session.expired",
+        actor: "system",
+      });
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "session has expired"));
+      return;
+    }
+    const normalized = normalizeBrowserRequest(typed);
+    if (!normalized.ok) {
+      respond(false, undefined, normalized.error);
+      return;
+    }
+    const actor = resolveClientActor(client);
+    appendDesktopControlAudit(session, {
+      type: "request.start",
+      actor,
+      details: {
+        method: normalized.request.methodRaw,
+        path: normalized.request.path,
+        route: session.route.kind,
+        nodeId: session.route.kind === "node" ? session.route.node.nodeId : null,
+      },
+    });
+    const nodeTarget = resolveDesktopSessionNodeTarget({
+      session,
+      nodes: context.nodeRegistry.listConnected(),
+    });
+    if (session.route.kind === "node" && !nodeTarget) {
+      appendDesktopControlAudit(session, {
+        type: "request.error",
+        actor,
+        details: {
+          reason: "pinned node disconnected",
+          nodeId: session.route.node.nodeId,
+        },
+      });
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.UNAVAILABLE,
+          `pinned browser node is not connected: ${session.route.node.nodeId}`,
+        ),
+      );
+      return;
+    }
+    const result = await dispatchBrowserRequest({
+      cfg: loadConfig(),
+      request: normalized.request,
+      context,
+      nodeTarget,
+    });
+    session.requestCount += 1;
+    session.lastRequestAtMs = Date.now();
+    if (!result.ok) {
+      appendDesktopControlAudit(session, {
+        type: "request.error",
+        actor,
+        details: {
+          route: result.route,
+          nodeId: result.nodeId,
+          status: result.status,
+          message: result.error.message,
+        },
+      });
+      respond(false, undefined, result.error);
+      return;
+    }
+    appendDesktopControlAudit(session, {
+      type: "request.ok",
+      actor,
+      details: {
+        route: result.route,
+        nodeId: result.nodeId,
+        status: result.status,
+      },
+    });
+    respond(true, result.payload);
   },
 };

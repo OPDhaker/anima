@@ -47,6 +47,7 @@ const APPROVAL_METHODS = new Set([
   "exec.approval.request",
   "exec.approval.waitDecision",
   "exec.approval.resolve",
+  "desktop.control.session.approve",
 ]);
 const NODE_ROLE_METHODS = new Set(["node.invoke.result", "node.event", "skills.bins"]);
 const PAIRING_METHODS = new Set([
@@ -92,6 +93,8 @@ const READ_METHODS = new Set([
   "node.describe",
   "chat.history",
   "browser.capabilities.get",
+  "desktop.control.session.list",
+  "desktop.control.session.get",
   "config.get",
   "talk.config",
   "anima.providers.get",
@@ -120,6 +123,9 @@ const WRITE_METHODS = new Set([
   "chat.send",
   "chat.abort",
   "browser.request",
+  "desktop.control.session.create",
+  "desktop.control.session.close",
+  "desktop.control.session.request",
   "anima.providers.set",
   "anima.providers.rotate",
 ]);

@@ -100,6 +100,12 @@ const BASE_METHODS = [
   "agent.wait",
   "browser.capabilities.get",
   "browser.request",
+  "desktop.control.session.create",
+  "desktop.control.session.list",
+  "desktop.control.session.get",
+  "desktop.control.session.approve",
+  "desktop.control.session.close",
+  "desktop.control.session.request",
   // WebChat WebSocket-native chat methods
   "chat.history",
   "chat.abort",
