@@ -3,14 +3,12 @@ import {
   listOrgs,
   getOrg,
   createOrg,
-  updateOrg,
   addOrgMember,
   updateOrgMember,
   removeOrgMember,
   getOrgHierarchy,
   joinOrgWithInvite,
   validateOrgInvite,
-  createOrgInvite,
   listBoardroomSessions,
   createBoardroomSession,
   startBoardroomSession,
@@ -43,21 +41,6 @@ function statusDot(status: OrgMemberStatus): string {
       return "status-dot";
     case "suspended":
       return "status-dot error";
-  }
-}
-
-function roleBadge(role: OrgRoleType): string {
-  switch (role) {
-    case "owner":
-      return "badge";
-    case "operator":
-      return "badge";
-    case "coordinator":
-      return "badge";
-    case "worker":
-      return "badge";
-    case "observer":
-      return "badge";
   }
 }
 
@@ -638,7 +621,7 @@ function JoinOrgModal({
         passcode: passcode.trim(),
       });
       setValidOrg(`${result.org.name} (role: ${result.role})`);
-    } catch (err) {
+    } catch {
       setValidError("Invalid invite code or passcode");
       setValidOrg(null);
     } finally {
@@ -868,10 +851,10 @@ function JoinOrgModal({
 function EditMemberPanel({
   member,
   members,
-  orgId,
+  orgId: _orgId,
   onSave,
   onRemove,
-  onCancel,
+  onCancel: _onCancel,
 }: {
   member: OrgMember;
   members: OrgMember[];
