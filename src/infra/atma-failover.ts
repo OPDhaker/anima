@@ -33,6 +33,7 @@ export type ModelTier =
   | "tertiary"
   | "openai-fallback"
   | "aws-bedrock"
+  | "svrn"
   | "local"
   | "peer";
 
@@ -132,10 +133,18 @@ export const DEFAULT_FALLBACK_CHAIN: ModelFallback[] = [
     lastCheckedAt: 0,
   },
   {
+    tier: "svrn",
+    provider: "svrn-network",
+    model: "qwen2.5-coder:7b",
+    priority: 5,
+    available: false, // needs SVRN node discovery
+    lastCheckedAt: 0,
+  },
+  {
     tier: "local",
     provider: "ollama",
     model: "qwen2.5-coder:7b",
-    priority: 5,
+    priority: 6,
     available: false, // needs local check
     lastCheckedAt: 0,
   },
@@ -143,7 +152,7 @@ export const DEFAULT_FALLBACK_CHAIN: ModelFallback[] = [
     tier: "peer",
     provider: "p2p-mesh",
     model: "peer-possession",
-    priority: 6,
+    priority: 7,
     available: false, // needs mesh check
     lastCheckedAt: 0,
   },
