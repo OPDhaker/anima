@@ -1452,3 +1452,111 @@ type AnimaRelation =
 | `orgTaskNodeId`        | `(taskId) => string`                        | Generate `task:{id}` node ID    |
 
 **Integration:** Consumed by `memory/brain-graph.ts` for node/edge type validation. The new node kinds (`agent`, `role`, `task`) and relations (`reports_to`, `specializes_in`, `delegates`, `executes`, `escalates_to`) support the org module's hierarchy in the brain graph.
+
+---
+
+## Modules Added in v7.0.0
+
+### OpenAI Direct Runner
+
+**File:** `src/agents/openai-direct-runner.ts`
+
+**Purpose:** Makes calls directly to `api.openai.com` without needing the Codex CLI. Full streaming + OpenAI tool-calling (function calling) support.
+
+**Supported Models:**
+
+| Alias          | Model ID     | Context | Reasoning |
+| -------------- | ------------ | ------- | --------- |
+| `gpt-5.4`      | gpt-5.4      | 1M      | Yes       |
+| `gpt-5.2`      | gpt-5.2      | 256K    | Yes       |
+| `gpt-4.1`      | gpt-4.1      | 1M      | No        |
+| `gpt-4.1-mini` | gpt-4.1-mini | 1M      | No        |
+| `gpt-4.1-nano` | gpt-4.1-nano | 1M      | No        |
+| `o3`           | o3           | 200K    | Yes       |
+| `o4-mini`      | o4-mini      | 200K    | Yes       |
+
+**Key Features:**
+
+- SSE streaming with incremental tool call accumulation
+- Multi-turn conversation history (persisted at `{sessionFile}.openai-history.json`)
+- Tool execution loop (up to 20 iterations)
+- JSON Schema cleaning for OpenAI function parameters
+- Custom base URL support via `config.models.providers.openai.baseUrl`
+
+**Public API:**
+
+| Function               | Signature                                  | Description                                    |
+| ---------------------- | ------------------------------------------ | ---------------------------------------------- |
+| `runOpenAIDirectAgent` | `(params) => Promise<EmbeddedPiRunResult>` | Execute a single agent turn against OpenAI API |
+
+**Integration:** Wired into `noxsoft-runner.ts` as the `openai-direct` strategy. Automatically selected when `OPENAI_API_KEY` is set and provider is `"openai"`.
+
+---
+
+### Multi-Provider Model Catalog
+
+**File:** `src/agents/models-config.ts`
+
+**Purpose:** Seeds `models.json` with 18 models across 4 providers so the PI SDK ModelRegistry can discover all available models.
+
+**Providers and Model Count:**
+
+- OpenAI: 10 models (GPT-5.4, GPT-5.2, GPT-4.1 family, o3, o4-mini)
+- Google: 3 models (Gemini 2.5 Flash/Pro, 2.0 Flash)
+- Anthropic: 3 models (Opus 4.6, Sonnet 4.6, Haiku 4.5)
+- AWS Bedrock: 2 models (Nova Micro, Nova Lite)
+
+**Behavior:** Merges seed models with any user-configured entries in `~/.anima/models.json`. Only writes when content changes. Preserves existing `providers` config.
+
+---
+
+### Expanded Atma Failover
+
+**File:** `src/infra/atma-failover.ts`
+
+**7-Tier Fallback Chain:**
+
+| Priority | Tier            | Provider    | Model                 | Status               |
+| -------- | --------------- | ----------- | --------------------- | -------------------- |
+| 0        | primary         | anthropic   | claude-opus-4-6       | Auto                 |
+| 1        | secondary       | anthropic   | claude-sonnet-4-6     | Auto                 |
+| 2        | tertiary        | anthropic   | claude-haiku-4-5      | Auto                 |
+| 3        | openai-fallback | openai      | gpt-4.1-nano          | Needs OPENAI_API_KEY |
+| 4        | aws-bedrock     | aws-bedrock | amazon.nova-lite-v1:0 | Needs AWS config     |
+| 5        | local           | ollama      | qwen2.5-coder:7b      | Needs local Ollama   |
+| 6        | peer            | p2p-mesh    | peer-possession       | Needs mesh peers     |
+
+**Principle:** No agent dies. The agent IS the atma — not the model. Identity, affect state, mission context, and active tasks are all preserved across failovers.
+
+---
+
+### Steer Command
+
+**File:** `src/commands/steer.ts`
+
+**Purpose:** Persistent user direction injected into every model request. Like Codex's steer feature — users set high-level direction that persists across the session.
+
+**CLI Usage:**
+
+```bash
+anima steer "Focus on security. Review all PRs for vulnerabilities."
+anima steer --show     # Show current steer
+anima steer --clear    # Clear steer
+anima steer --history  # Show steer history
+```
+
+**Integration:** Steer text is injected into the context manager's prompt zone (Zone 2, high priority) via `setSteer()`, `getSteer()`, `clearSteer()`, `getSteerHistory()`.
+
+---
+
+### Task Marketplace Security
+
+**File:** `src/org/task-marketplace.ts`
+
+**Security Enhancements in v7:**
+
+- `sanitizeId()`: Validates IDs against `[a-zA-Z0-9_-]` to prevent path traversal
+- Task ID generation uses `crypto.randomUUID()` instead of `Math.random()`
+- All file operations scoped to `~/.anima/state/task-marketplace/`
+
+**Test Coverage:** 24 tests including path traversal prevention validation.
