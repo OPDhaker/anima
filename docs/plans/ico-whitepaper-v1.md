@@ -493,12 +493,13 @@ Included coverage:
 Release artifact target:
 
 - `docs/plans/ico-litepaper-v1.md` (initial draft created on 2026-03-15).
+- `docs/marketing/ico-launch-page-copy-v1.md` (web-ready copy blocks + real/state-aware metric rules; initial draft created on 2026-03-15).
 
 ---
 
 ## Next Steps
 
 - Convert remaining Appendix artifact targets into dedicated docs files and link them from this whitepaper.
-- Convert litepaper content into web-ready homepage/launch-page copy blocks with proof links.
+- Implement launch-page copy blocks in frontend surfaces with source-bound metrics and state badges (`live`, `delayed`, `stale`, `unavailable`).
 - Add metric tables and launch-readiness criteria per roadmap phase.
 - Align legal/compliance wording with final counsel review packet and counsel-approved disclaimer text.

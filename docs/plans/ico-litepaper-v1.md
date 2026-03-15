@@ -130,6 +130,6 @@ Current live execution artifacts:
 
 ## 9. Next Update Targets
 
-- Convert this one-pager into web-ready copy blocks (hero, proof strip, metrics section, CTA rail).
+- Converted this one-pager into web-ready copy blocks in `docs/marketing/ico-launch-page-copy-v1.md` (hero, proof strip, metrics wall with state handling, roadmap, CTA rail).
 - Align wording with final legal/compliance language once counsel-reviewed terms are locked.
 - Attach verifiable metric snapshots to the homepage impact module.
