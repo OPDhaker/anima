@@ -477,10 +477,28 @@ Release artifact target:
 
 - `docs/marketing/brand-positioning-v1.md` and `docs/marketing/progress-proof-template.md` (initial drafts created).
 
+### 7.7 Litepaper and Public One-Pager Appendix
+
+Objective:
+
+- Provide a concise, public-facing briefing that translates the full whitepaper into launch-readable messaging for partners, contributors, and prospective participants.
+
+Included coverage:
+
+- One-page thesis and problem/solution summary.
+- Token model framing with compliance-safe language (utility/revenue-aligned, not equity).
+- Roadmap snapshot and metric publication template for homepage impact reporting.
+- Risk/compliance note and proof-of-progress links.
+
+Release artifact target:
+
+- `docs/plans/ico-litepaper-v1.md` (initial draft created on 2026-03-15).
+
 ---
 
 ## Next Steps
 
 - Convert remaining Appendix artifact targets into dedicated docs files and link them from this whitepaper.
+- Convert litepaper content into web-ready homepage/launch-page copy blocks with proof links.
 - Add metric tables and launch-readiness criteria per roadmap phase.
 - Align legal/compliance wording with final counsel review packet and counsel-approved disclaimer text.
