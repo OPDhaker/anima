@@ -205,8 +205,183 @@ This section is a working draft for execution planning and ecosystem alignment. 
 
 ---
 
-## Next Sections (Queued)
+## 5. Roadmap and Execution Phases
 
-- 5. Roadmap and execution phases
-- 6. Risks and safeguards
-- 7. Appendices (technical, economic, governance, security)
+The roadmap is structured for compounding delivery: harden core systems first, then scale distribution and governance as reliability and compliance maturity increase.
+
+### Phase 1: Foundation (0-3 Months)
+
+Primary goals:
+
+- Stabilize the core agent runtime, gateway, and orchestration surfaces.
+- Finalize whitepaper/legal baseline and public launch documentation.
+- Complete pre-launch security controls (threat model, hardening checklist, incident paths).
+- Establish measurement baselines for uptime, task throughput, and release quality.
+
+Execution outputs:
+
+- Production-ready core stack with clear operator runbooks.
+- Public docs set (technical reference, product positioning, token model summary).
+- Security and compliance readiness checklist with named owners.
+
+### Phase 2: Token Infrastructure and Launch Readiness (3-6 Months)
+
+Primary goals:
+
+- Finalize token/legal architecture and sale mechanics.
+- Complete smart-contract audits and remediation loops.
+- Deploy treasury control surfaces (multi-sig, policy rules, reporting cadence).
+- Stand up investor/participant onboarding flows with verification controls.
+
+Execution outputs:
+
+- Audited launch contracts and published risk disclosures.
+- Operational sale infrastructure with monitoring and rollback plans.
+- Governance bootstrap policy for early proposal/voting classes.
+
+### Phase 3: Ecosystem Expansion (6-12 Months)
+
+Primary goals:
+
+- Expand product integrations across communication, compute, and workflow modules.
+- Improve developer adoption through SDK/doc improvements and partner onboarding.
+- Launch contribution incentives tied to measurable utility and quality outcomes.
+- Strengthen cross-product telemetry for transparent network health reporting.
+
+Execution outputs:
+
+- Broader module interoperability with lower integration friction.
+- Partner pipeline and contributor program with documented standards.
+- Public reporting rhythm for adoption, reliability, and treasury utilization.
+
+### Phase 4: Decentralized Operations (12+ Months)
+
+Primary goals:
+
+- Increase community governance authority with explicit guardrails.
+- Mature long-horizon treasury and policy governance processes.
+- Reduce single-operator dependency through resilient multi-stakeholder operations.
+
+Execution outputs:
+
+- Governance maturity model with clear scope progression.
+- Policy/audit archives and reproducible operational transparency.
+- Durable contributor ecosystem aligned to protocol-level incentives.
+
+### Roadmap Governance and Change Control
+
+Roadmap changes should follow a controlled process: publish rationale, define success criteria, assign accountable owners, and include rollback conditions. This keeps adaptation possible without degrading trust.
+
+---
+
+## 6. Risks and Safeguards
+
+NoxSoft treats risk management as a first-class operating function, not a post-launch patch. The ICO and platform rollout will only be credible if risk controls are explicit, tested, and transparent.
+
+### 6.1 Regulatory and Jurisdictional Risk
+
+Primary risk:
+
+- Token classification and jurisdiction-specific rules can affect issuance, marketing, and participation eligibility.
+
+Safeguards:
+
+- Multi-jurisdiction legal review before final sale terms.
+- Clear participant eligibility rules and disclosure language.
+- Policy gating so distribution flows can be adapted without unsafe ad-hoc changes.
+
+### 6.2 Smart Contract and Protocol Risk
+
+Primary risk:
+
+- Logic flaws, privilege escalation, and integration errors can cause financial or governance harm.
+
+Safeguards:
+
+- Independent third-party audits with public summaries.
+- Staged deployment, guarded upgrade paths, and emergency pause controls.
+- Regression suites and invariants for token, treasury, and voting logic.
+
+### 6.3 Operational and Infrastructure Risk
+
+Primary risk:
+
+- Service outages, dependency failures, and incident response delays can break trust during high-sensitivity periods.
+
+Safeguards:
+
+- Reliability baselines (monitoring, alerting, rollback procedures, on-call ownership).
+- Resilience patterns in agent execution (fallback chains, rate limiting, validation layers).
+- Documented incident communication runbooks with post-incident review requirements.
+
+### 6.4 Treasury and Financial Governance Risk
+
+Primary risk:
+
+- Misallocation, concentration, or opaque fund movement can destabilize execution and community confidence.
+
+Safeguards:
+
+- Multi-sig treasury controls with separation of duties.
+- Policy-bound disbursement rules and periodic transparency reports.
+- Governance-visible budget lanes tied to roadmap milestones.
+
+### 6.5 Security and Abuse Risk
+
+Primary risk:
+
+- Adversarial behavior (exploits, fraud, social engineering, spam/abuse) can target both technical and organizational layers.
+
+Safeguards:
+
+- Defense-in-depth controls across gateway, identity, and data pathways.
+- Continuous vulnerability management and dependency hygiene.
+- Clear abuse reporting, triage, and enforcement processes.
+
+### 6.6 Market and Adoption Risk
+
+Primary risk:
+
+- Weak product-market fit or poor onboarding can reduce utility and undermine token alignment.
+
+Safeguards:
+
+- Utility-first release sequencing where token utility follows real usage.
+- Frequent feedback loops with measurable product and ecosystem KPIs.
+- Conservative planning assumptions with scenario-based contingency actions.
+
+### 6.7 Governance Capture Risk
+
+Primary risk:
+
+- Concentrated token ownership or low participation can distort governance outcomes.
+
+Safeguards:
+
+- Participation incentives and quorum protections.
+- Proposal-class restrictions and time delays on sensitive changes.
+- Transparent voting data and governance process documentation.
+
+### Risk Disclosure Note
+
+This section outlines control direction, not guaranteed outcomes. Final risk posture is determined by audited technical artifacts, legal documentation, and observed operational discipline over time.
+
+---
+
+## 7. Appendix Plan (v1.1 Scope)
+
+The following appendices are scoped for the next draft increment:
+
+- Technical architecture appendix: subsystem map, interfaces, and deployment patterns.
+- Economic model appendix: scenario tables, distribution simulations, and sensitivity analysis.
+- Governance appendix: proposal classes, voting lifecycle, quorum and delegation rules.
+- Security appendix: threat model summary, audit digest, and incident response policy.
+- Compliance appendix: jurisdictional assumptions, eligibility policy, and disclosure matrix.
+
+---
+
+## Next Steps
+
+- Draft Section 7 appendices in detail (v1.1 expansion).
+- Add metric tables and release criteria per roadmap phase.
+- Align legal/compliance wording with final counsel review packet.
