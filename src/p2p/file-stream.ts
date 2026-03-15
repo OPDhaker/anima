@@ -14,12 +14,12 @@
  */
 
 import crypto from "node:crypto";
+import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
-import { EventEmitter } from "node:events";
-import { Readable, Writable } from "node:stream";
-import { createSubsystemLogger } from "../logging/subsystem.js";
+import { Writable } from "node:stream";
 import type { ContentManifest } from "./content-router.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 
 const log = createSubsystemLogger("p2p-file-stream");
 
@@ -111,7 +111,9 @@ export class FileDownloadStream extends EventEmitter {
     const inFlight = new Set<number>();
 
     const fetchChunk = async (index: number): Promise<void> => {
-      if (this.aborted || index >= chunkHashes.length) return;
+      if (this.aborted || index >= chunkHashes.length) {
+        return;
+      }
 
       const hash = chunkHashes[index];
       inFlight.add(index);
@@ -171,7 +173,9 @@ export class FileDownloadStream extends EventEmitter {
       }
 
       // Write any ready chunks
-      if (writeReady()) break;
+      if (writeReady()) {
+        break;
+      }
 
       // Wait for any in-flight fetch to complete
       if (inFlight.size > 0) {
@@ -278,9 +282,7 @@ export async function uploadFile(params: {
     }
   }
 
-  log.info(
-    `upload complete: ${params.data.length} bytes, ${totalChunks} chunks, ${durationMs}ms`,
-  );
+  log.info(`upload complete: ${params.data.length} bytes, ${totalChunks} chunks, ${durationMs}ms`);
 
   return {
     contentHash,
