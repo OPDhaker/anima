@@ -1,7 +1,7 @@
 /**
  * ANIMA 6 License & Payment System
  *
- * NoxSoft subscription: $20/mo via Stripe.
+ * NoxSoft subscription: $30/mo via Stripe.
  * Community tier free forever with generous limits.
  */
 

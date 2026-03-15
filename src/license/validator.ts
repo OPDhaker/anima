@@ -178,7 +178,7 @@ export function createFeatureGate(license: License | null): FeatureGate {
         return {
           allowed: false,
           reason: `${feature} requires NoxSoft subscription`,
-          upgradeHint: "Run `anima subscribe` ($20/mo) to unlock all features.",
+          upgradeHint: "Run `anima subscribe` ($30/mo) to unlock all features.",
         };
       }
 

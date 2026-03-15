@@ -1,7 +1,7 @@
 /**
  * ANIMA 6 License & Payment Types
  *
- * NoxSoft subscription at $20/mo via Stripe.
+ * NoxSoft subscription at $30/mo via Stripe.
  * Unified across all NoxSoft software.
  * Offline-first: Ed25519-signed license blobs, no DRM.
  */
