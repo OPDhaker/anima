@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-15  
 **Owner:** Resonant Signal (`Ju`)  
-**Status:** Draft in progress (Sections 1-2 complete)
+**Status:** Draft in progress (Sections 1-4 complete)
 
 ---
 
@@ -78,10 +78,135 @@ NoxSoft positions the ICO as the financing and coordination mechanism for that a
 
 ---
 
+## 3. Solution
+
+NoxSoft's solution is a layered architecture that connects agent capability, product execution, and economic coordination into one operating system. The design goal is to keep the developer and user experience practical while ensuring value flow and governance are visible at the protocol layer.
+
+### 3.1 Unified Agent Layer
+
+At the core is a persistent agent runtime that supports:
+
+- Durable memory and continuity across sessions.
+- Steerability and policy controls so operators can direct behavior safely.
+- Identity and integrity signals for accountability.
+- Multi-agent coordination primitives for delegation and orchestration.
+
+This layer is intended to make agents reliable collaborators rather than stateless chat wrappers.
+
+### 3.2 Product Network Instead of Product Silos
+
+NoxSoft products are designed as interoperable modules instead of disconnected SaaS endpoints. Communication, automation, and compute services share common identity, permissions, and execution context. Workflows can move across modules without rebuilding logic for every tool boundary.
+
+In practice, this supports:
+
+- Lower integration overhead for teams.
+- Better portability of automation.
+- Faster iteration cycles for new workflows.
+
+### 3.3 Economic and Verification Rails
+
+Execution is paired with explicit economic rails:
+
+- Revenue-token mechanics tied to platform usage.
+- Transparent fee and distribution pathways.
+- Verification and compliance modules for regulated flows (KYC/AML lanes, risk controls, and audit surfaces).
+
+This pairing is critical: capability without accountable economics recreates platform extraction, while economics without execution utility creates speculative fragility.
+
+### 3.4 Infrastructure Direction
+
+The technical roadmap includes:
+
+- Multi-chain launch and settlement compatibility (SVRN + Ethereum paths).
+- Security hardening at gateway and contract levels.
+- Progressive reliability features (rate limiting, validation, observability, and incident controls).
+- Modular growth so additional products can plug into a common economic substrate.
+
+The objective is not maximal complexity. It is stable composition: each added module should increase network value without introducing brittle coupling.
+
+### 3.5 Progressive Decentralization Path
+
+NoxSoft is following a staged control model:
+
+1. Build and harden core infrastructure quickly under coordinated execution.
+2. Expose governance and reporting mechanisms as systems mature.
+3. Shift higher-impact decisions toward token-governed processes with explicit guardrails.
+
+This allows fast early execution without pretending decentralization is complete on day one.
+
+---
+
+## 4. Tokenomics (Draft v1)
+
+The NoxSoft token is designed as a revenue-aligned utility and governance instrument. It is not equity. The purpose is to link ecosystem participation to measurable protocol activity and transparent policy.
+
+### 4.1 Core Design Principles
+
+- Utility before speculation: token functions must map to actual platform behavior.
+- Transparent value flow: fees, distributions, and treasury rules should be auditable.
+- Anti-concentration controls: launch and transfer mechanisms should limit extraction by single actors.
+- Governance evolution: voting scope expands with operational maturity.
+
+### 4.2 Allocation Framework
+
+Current implementation defaults in `src/ico/tokenomics.ts` define the following allocation:
+
+- Team: **5%**
+- Company round / operations runway: **30%**
+- Revenue-share pool: **50%**
+- UBC distribution: **15%**
+
+These values are implementation defaults and remain subject to legal and governance review before final launch ratification.
+
+### 4.3 Supply and Sale Mechanics
+
+Current configuration specifies:
+
+- Total supply target: **1,000,000,000 tokens**
+- Initial bonding-curve price: **$0.001**
+- Bonding-curve raise target: **$2,000,000**
+- Reserve ratio: **50%** (Bancor-style curve behavior)
+- Post-cap transition: sale exits bonding phase toward market pricing
+
+Planned safeguards include anti-whale controls, pause/unpause emergency mechanisms, and timelock/multi-sig controls on sensitive operations.
+
+### 4.4 Revenue and Fee Flows
+
+The present draft model includes:
+
+- Transfer tax baseline: **1%**
+- Revenue-share rate baseline: **5%**
+- Revenue-share duration baseline: **2 years**
+- Additional platform fee rails in ICO flows (for example, verification/platform tax paths defined in existing modules)
+
+Distribution logic is intended to be transparent and rules-based, not discretionary.
+
+### 4.5 Governance and Holder Rights (Planned)
+
+Governance direction includes token-weighted voting for defined proposal classes, quorum requirements, and staged scope expansion (operations first, then broader policy lanes). Final rights and constraints will be published with legal review artifacts and contract audit outputs.
+
+### 4.6 Vesting, Lockups, and Treasury Discipline
+
+Current planning assumptions include:
+
+- Team vesting: multi-year schedule with cliff.
+- Company allocation vesting: time-based release for runway discipline.
+- Treasury controls: multi-sig custody, policy-bound deployment, and transparent reporting cadence.
+
+These controls are intended to reduce short-term extraction pressure and align execution with long-horizon delivery.
+
+### 4.7 Dual-Chain Strategy
+
+NoxSoft currently models launch compatibility across SVRN and Ethereum to balance ecosystem-native utility with broader market accessibility. Cross-chain operation and migration controls require final security and legal review before production activation.
+
+### 4.8 Draft and Risk Notice
+
+This section is a working draft for execution planning and ecosystem alignment. It is not investment, legal, or tax advice. Final tokenomics will be governed by audited contracts, legal documentation, and published governance parameters at launch readiness.
+
+---
+
 ## Next Sections (Queued)
 
-- 3. Solution and architecture stack
-- 4. Tokenomics and distribution mechanics
 - 5. Roadmap and execution phases
 - 6. Risks and safeguards
 - 7. Appendices (technical, economic, governance, security)
