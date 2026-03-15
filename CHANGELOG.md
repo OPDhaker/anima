@@ -36,6 +36,11 @@ ANIMA — NoxSoft AI Life System
 
 - **P2P relay tests** (20 tests): Lifecycle, relay accept/reject, data forwarding, session cleanup, bandwidth tracking, latency selection.
 - **Task marketplace tests** (24 tests): CRUD, specialization enforcement, review flow, TTL escalation, path traversal prevention.
+- **Org store tests** (23 tests): CRUD, members, hierarchy, invites (join/reject/expire/revoke), path traversal.
+- **Content router tests** (20 tests): Storage, chunking, manifest, hash verification, routing table, requests.
+- **Private DNS tests** (21 tests): Registration (A/SRV/TXT/CNAME), resolution, CNAME following, TTL, Ed25519.
+- **Content pinning tests** (17 tests): Pin/unpin, replication factor, agreement tracking, peer lifecycle.
+- **Steer UI panel** (`ui/src/pages/Steer.tsx`): Live editing, clear, and history table for persistent direction.
 
 ### Price
 
