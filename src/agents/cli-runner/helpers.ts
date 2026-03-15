@@ -10,6 +10,10 @@ import type { CliBackendConfig } from "../../config/types.js";
 import type { EmbeddedContextFile } from "../pi-embedded-helpers.js";
 import { getEgoManager } from "../../affect/ego.js";
 import { formatSteerForContext } from "../../commands/steer.js";
+import {
+  generateArchitectureMap,
+  formatArchitectureForContext,
+} from "../../infra/architecture-awareness.js";
 import { runExec } from "../../process/exec.js";
 import { buildTtsSystemPromptHint } from "../../tts/tts.js";
 import { escapeRegExp, isRecord } from "../../utils.js";
@@ -308,6 +312,17 @@ export function buildSystemPrompt(params: {
     }
   } catch {
     // steer not available or no active steer — skip
+  }
+  try {
+    const archMap = generateArchitectureMap(params.workspaceDir);
+    const archBlock = formatArchitectureForContext(archMap);
+    if (archBlock) {
+      resolvedExtraSystemPrompt = [resolvedExtraSystemPrompt, archBlock]
+        .filter(Boolean)
+        .join("\n\n");
+    }
+  } catch {
+    // architecture awareness not available — skip
   }
 
   const ttsHint = params.config ? buildTtsSystemPromptHint(params.config) : undefined;
