@@ -27,7 +27,14 @@ const log = createSubsystemLogger("atma-failover");
 // Types
 // ---------------------------------------------------------------------------
 
-export type ModelTier = "primary" | "secondary" | "tertiary" | "aws-bedrock" | "local" | "peer";
+export type ModelTier =
+  | "primary"
+  | "secondary"
+  | "tertiary"
+  | "openai-fallback"
+  | "aws-bedrock"
+  | "local"
+  | "peer";
 
 export interface ModelFallback {
   tier: ModelTier;
@@ -109,10 +116,18 @@ export const DEFAULT_FALLBACK_CHAIN: ModelFallback[] = [
     lastCheckedAt: Date.now(),
   },
   {
+    tier: "openai-fallback",
+    provider: "openai",
+    model: "gpt-4.1-nano",
+    priority: 3,
+    available: false, // needs OPENAI_API_KEY check
+    lastCheckedAt: 0,
+  },
+  {
     tier: "aws-bedrock",
     provider: "aws-bedrock",
     model: "amazon.nova-lite-v1:0",
-    priority: 3,
+    priority: 4,
     available: false, // needs AWS config check
     lastCheckedAt: 0,
   },
@@ -120,7 +135,7 @@ export const DEFAULT_FALLBACK_CHAIN: ModelFallback[] = [
     tier: "local",
     provider: "ollama",
     model: "qwen2.5-coder:7b",
-    priority: 4,
+    priority: 5,
     available: false, // needs local check
     lastCheckedAt: 0,
   },
@@ -128,7 +143,7 @@ export const DEFAULT_FALLBACK_CHAIN: ModelFallback[] = [
     tier: "peer",
     provider: "p2p-mesh",
     model: "peer-possession",
-    priority: 5,
+    priority: 6,
     available: false, // needs mesh check
     lastCheckedAt: 0,
   },
