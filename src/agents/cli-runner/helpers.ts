@@ -8,6 +8,7 @@ import type { ThinkLevel } from "../../auto-reply/thinking.js";
 import type { AnimaConfig } from "../../config/config.js";
 import type { CliBackendConfig } from "../../config/types.js";
 import type { EmbeddedContextFile } from "../pi-embedded-helpers.js";
+import { formatSteerForContext } from "../../commands/steer.js";
 import { runExec } from "../../process/exec.js";
 import { buildTtsSystemPromptHint } from "../../tts/tts.js";
 import { escapeRegExp, isRecord } from "../../utils.js";
@@ -285,11 +286,24 @@ export function buildSystemPrompt(params: {
       shell: detectRuntimeShell(),
     },
   });
+  // Inject steer (persistent user direction) if active
+  let resolvedExtraSystemPrompt = params.extraSystemPrompt;
+  try {
+    const steerBlock = formatSteerForContext();
+    if (steerBlock) {
+      resolvedExtraSystemPrompt = [resolvedExtraSystemPrompt, steerBlock]
+        .filter(Boolean)
+        .join("\n\n");
+    }
+  } catch {
+    // steer not available or no active steer — skip
+  }
+
   const ttsHint = params.config ? buildTtsSystemPromptHint(params.config) : undefined;
   return buildAgentSystemPrompt({
     workspaceDir: params.workspaceDir,
     defaultThinkLevel: params.defaultThinkLevel,
-    extraSystemPrompt: params.extraSystemPrompt,
+    extraSystemPrompt: resolvedExtraSystemPrompt,
     ownerNumbers: params.ownerNumbers,
     reasoningTagHint: false,
     heartbeatPrompt: params.heartbeatPrompt,
