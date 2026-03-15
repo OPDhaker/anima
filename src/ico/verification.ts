@@ -7,6 +7,7 @@
  * Delaware PBC is the primary standard. Other state/country PBCs accepted.
  */
 
+import { randomUUID } from "node:crypto";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 
 const log = createSubsystemLogger("ico-verification");
@@ -167,7 +168,7 @@ export function createVerification(
   filingDate: string,
   publicBenefitPurpose: string,
 ): PbcVerification {
-  const id = `pbc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const id = `pbc-${randomUUID()}`;
 
   const verification: PbcVerification = {
     id,

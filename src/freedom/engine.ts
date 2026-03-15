@@ -14,6 +14,7 @@
  * - Persisted (so the agent remembers what it did)
  */
 
+import { randomUUID } from "node:crypto";
 import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -119,7 +120,7 @@ export class FreedomEngine {
     const prompt = getFreedomPrompt(activity);
 
     const session: FreedomSession = {
-      id: `freedom_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      id: `freedom_${randomUUID()}`,
       activity,
       startedAt: new Date(),
     };
