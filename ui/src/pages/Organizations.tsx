@@ -1585,6 +1585,220 @@ function BoardroomPanel({ orgId }: { orgId: string }): React.ReactElement {
 // Main Organizations Page
 // ---------------------------------------------------------------------------
 
+function BoardroomPanel({ orgId }: { orgId: string }): React.ReactElement {
+  const [sessions, setSessions] = useState<BoardroomSession[]>([]);
+  const [proposals, setProposals] = useState<BoardroomProposal[]>([]);
+  const [panelLoading, setPanelLoading] = useState(true);
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [s, p] = await Promise.all([
+          listBoardroomSessions(orgId),
+          listBoardroomProposals(orgId),
+        ]);
+        setSessions(s);
+        setProposals(p);
+      } catch {
+        /* empty */
+      } finally {
+        setPanelLoading(false);
+      }
+    })();
+  }, [orgId]);
+  if (panelLoading) {
+    return (
+      <div className="card" style={{ padding: 20, color: "#888" }}>
+        Loading boardroom...
+      </div>
+    );
+  }
+  return (
+    <div className="card" style={{ padding: 20 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 16,
+        }}
+      >
+        <h3 style={{ margin: 0 }}>Boardroom</h3>
+        <button
+          className="btn btn-primary"
+          style={{ fontSize: 12 }}
+          onClick={async () => {
+            await createBoardroomSession({
+              orgId,
+              calledBy: "user",
+              title: `Meeting — ${new Date().toLocaleDateString()}`,
+              description: "Ad-hoc session",
+            });
+            setSessions(await listBoardroomSessions(orgId));
+          }}
+        >
+          + New Session
+        </button>
+      </div>
+      <h4 style={{ color: "#ff6600", fontSize: 13, marginBottom: 8 }}>Sessions</h4>
+      {sessions.length === 0 ? (
+        <p style={{ color: "#666", fontSize: 13 }}>No sessions yet.</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
+          {sessions.map((s) => (
+            <div
+              key={s.id}
+              style={{
+                padding: "12px 16px",
+                background: s.status === "active" ? "#1a2a1a" : "#1a1a1a",
+                border: `1px solid ${s.status === "active" ? "#00c853" : "#333"}`,
+                borderRadius: 8,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontWeight: 600 }}>{s.title}</span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    padding: "2px 8px",
+                    borderRadius: 4,
+                    background: s.status === "active" ? "#00c85333" : "#ff660033",
+                    color: s.status === "active" ? "#00c853" : "#ff6600",
+                  }}
+                >
+                  {s.status}
+                </span>
+              </div>
+              <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>
+                By {s.calledBy} · {relativeTime(s.calledAt)} · {s.participants.length} participants
+                · {s.decisions.length} decisions
+              </div>
+              {s.status === "scheduled" && (
+                <button
+                  className="btn"
+                  style={{ fontSize: 11, marginTop: 8, padding: "4px 12px" }}
+                  onClick={async () => {
+                    await startBoardroomSession(s.id, "user");
+                    setSessions(await listBoardroomSessions(orgId));
+                  }}
+                >
+                  Start
+                </button>
+              )}
+              {s.status === "active" && (
+                <button
+                  className="btn"
+                  style={{ fontSize: 11, marginTop: 8, padding: "4px 12px" }}
+                  onClick={async () => {
+                    await concludeBoardroomSession(s.id);
+                    setSessions(await listBoardroomSessions(orgId));
+                  }}
+                >
+                  Conclude
+                </button>
+              )}
+              {s.minutes && (
+                <details style={{ marginTop: 8, fontSize: 12 }}>
+                  <summary style={{ cursor: "pointer", color: "#ff6600" }}>Minutes</summary>
+                  <pre
+                    style={{
+                      whiteSpace: "pre-wrap",
+                      color: "#aaa",
+                      fontSize: 11,
+                      maxHeight: 300,
+                      overflow: "auto",
+                    }}
+                  >
+                    {s.minutes}
+                  </pre>
+                </details>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 8,
+        }}
+      >
+        <h4 style={{ color: "#ff6600", fontSize: 13, margin: 0 }}>Proposals</h4>
+        <button
+          className="btn"
+          style={{ fontSize: 11, padding: "4px 12px" }}
+          onClick={async () => {
+            const title = prompt("Proposal title:");
+            if (!title) {
+              return;
+            }
+            await createBoardroomProposal({
+              orgId,
+              proposedBy: "user",
+              title,
+              description: prompt("Description:") ?? "",
+            });
+            setProposals(await listBoardroomProposals(orgId));
+          }}
+        >
+          + New Proposal
+        </button>
+      </div>
+      {proposals.length === 0 ? (
+        <p style={{ color: "#666", fontSize: 13 }}>No proposals yet.</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {proposals.map((p) => (
+            <div
+              key={p.id}
+              style={{
+                padding: "12px 16px",
+                background: "#1a1a1a",
+                border: `1px solid ${p.status === "open" ? "#2196f3" : p.status === "passed" ? "#00c853" : "#ff3b30"}`,
+                borderRadius: 8,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontWeight: 600 }}>{p.title}</span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    padding: "2px 8px",
+                    borderRadius: 4,
+                    background:
+                      p.status === "open"
+                        ? "#2196f333"
+                        : p.status === "passed"
+                          ? "#00c85333"
+                          : "#ff3b3033",
+                    color:
+                      p.status === "open"
+                        ? "#2196f3"
+                        : p.status === "passed"
+                          ? "#00c853"
+                          : "#ff3b30",
+                  }}
+                >
+                  {p.status}
+                </span>
+              </div>
+              <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>
+                By {p.proposedBy} · {relativeTime(p.proposedAt)} ·{" "}
+                {p.votes.filter((v) => v.value === "approve").length} approve /{" "}
+                {p.votes.filter((v) => v.value === "reject").length} reject
+                {p.resolutionNotes && (
+                  <span style={{ marginLeft: 8, color: "#ff6600" }}>— {p.resolutionNotes}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Organizations(): React.ReactElement {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1641,24 +1855,6 @@ export default function Organizations(): React.ReactElement {
       void loadOrgDetails(selectedOrgId);
     }
   }, [selectedOrgId, loadOrgDetails]);
-
-  // Load boardroom data when tab is selected
-  useEffect(() => {
-    if (activeTab === "boardroom" && selectedOrgId) {
-      void (async () => {
-        try {
-          const [s, p] = await Promise.all([
-            listBoardroomSessions(selectedOrgId),
-            listBoardroomProposals(selectedOrgId),
-          ]);
-          setSessions(s);
-          setProposals(p);
-        } catch {
-          // boardroom not yet populated — that's fine
-        }
-      })();
-    }
-  }, [activeTab, selectedOrgId]);
 
   const handleCreateOrg = useCallback(
     async (params: {
