@@ -21,6 +21,12 @@ ANIMA — NoxSoft AI Life System
 - **Content pinning** (`src/p2p/pinning.ts`): Replication factor 3 with auto re-replication.
 - **Ego system** (`src/affect/ego.ts`): Agent self-model with self-concept (name, purpose, values, narrative), capability self-assessment with trends, boundaries (hard/soft), growth log (skill/insight/mistake/feedback), integrity scoring, and full gateway RPC (7 methods: ego.get, ego.summary, ego.updateSelf, ego.assess, ego.addBoundary, ego.logGrowth, ego.checkIntegrity). Persists across sessions, injected into system prompt.
 - **Affect system**: 6D emotional state (joy/frustration/curiosity/confidence/care/fatigue), glassmorphism gradients, journal, wellbeing detection, reminders, coordination, legacy letters, initiatives, status broadcast.
+- **Self-reflection engine** (`src/affect/self-reflection.ts`): Post-session performance analysis with quality scoring, strength/growth tracking, pattern detection across sessions, and trend analysis.
+- **Auto-update system** (`src/infra/auto-update.ts`): No-npm self-update via GitHub releases API with SHA-256 verification, hot-swap, rollback, and decentralized evolution proposal auditing.
+- **Architecture self-awareness** (`src/infra/architecture-awareness.ts`): Agent knows its own 14 subsystems and capabilities, injected into every system prompt.
+- **SVRN compute integration** (`src/svrn/compute.ts`): Decentralized inference via SVRN nodes (qwen-2.5-coder, llama), reducing cloud costs.
+- **Hourly journal cron**: Automated affect logging + self-reflection every 60 minutes.
+- **5 agent role profiles**: guardian, architect, builder, coordinator, researcher templates for multi-agent organizations.
 - **Self-evolution pipeline** (`src/infra/self-evolution.ts`): Each agent proposes 1 change/day to Anima.
 - **AWS Bedrock runner** (`src/agents/aws-bedrock-runner.ts`): 6 AWS models including Nova Micro at $0.000035/1K tokens.
 - **ICO launch platform** (`src/ico/`): Bonding curve smart contracts, revenue tokens (NOT equity), PBC verification.
@@ -31,7 +37,9 @@ ANIMA — NoxSoft AI Life System
 
 - **Path traversal fix**: IDs in `org/store.ts` and `org/task-marketplace.ts` now validated against `[a-zA-Z0-9_-]`.
 - **Task ID generation**: Switched from `Math.random()` to `crypto.randomUUID()`.
-- **Dependency fixes**: `tar` 7.5.7 → 7.5.11, `fast-xml-parser` override ≥5.3.8. Critical CVEs resolved.
+- **OWASP security headers**: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, HSTS on all HTTP responses.
+- **ID collision sweep**: 23 `Date.now()`/`Math.random()` IDs replaced with `crypto.randomUUID()` across 13 files.
+- **Dependency fixes**: `tar` 7.5.7 → 7.5.11, `fast-xml-parser` override ≥5.3.8, `undici` 7.22 → 7.24 (WebSocket overflow CVEs). Dependabot 23 → 17.
 
 ### Test Coverage
 
