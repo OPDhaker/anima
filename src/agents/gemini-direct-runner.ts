@@ -255,7 +255,7 @@ export async function runGeminiDirectAgent(params: {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "User-Agent": `anima/5.0.1 (gemini-direct-runner; ${os.platform()})`,
+          "User-Agent": `anima/7.0.0 (gemini-direct-runner; ${os.platform()})`,
         },
         body: JSON.stringify(requestBody),
         signal: controller.signal,

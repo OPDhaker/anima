@@ -304,7 +304,7 @@ export async function runOpenAIDirectAgent(params: {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${params.apiKey}`,
-          "User-Agent": `anima/6.5.0 (openai-direct-runner; ${os.platform()})`,
+          "User-Agent": `anima/7.0.0 (openai-direct-runner; ${os.platform()})`,
         },
         body: JSON.stringify(requestBody),
         signal: controller.signal,

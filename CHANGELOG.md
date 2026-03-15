@@ -2,6 +2,45 @@
 
 ANIMA — NoxSoft AI Life System
 
+## 7.0.0 (2026-03-15)
+
+**The Private Internet Release.** Anima is now a fully multi-provider AI runtime with direct API support for OpenAI, Google, Anthropic, and AWS Bedrock — no CLI dependencies required.
+
+### New Features
+
+- **OpenAI Direct Runner** (`src/agents/openai-direct-runner.ts`): Full streaming + tool calling support for GPT-5.4, GPT-5.2, GPT-4.1, o3, o4-mini. Bypasses Codex CLI entirely — just set `OPENAI_API_KEY`.
+- **Multi-provider model catalog** (`src/agents/models-config.ts`): Seeds 18 models across 4 providers (OpenAI, Google, Anthropic, Bedrock) so the model selector shows all available models.
+- **OpenAI-direct strategy** in NoxSoft runner: Provider routing now includes `openai-direct` alongside `anthropic-direct` and `gemini-direct`.
+- **Expanded atma failover chain**: 7 tiers — opus → sonnet → haiku → gpt-4.1-nano → bedrock → local → peer. No agent dies.
+- **Steer command** (`src/commands/steer.ts`): Persistent user direction injected into every model request via context manager (like Codex's steer).
+- **Jack In page** (`ui/src/pages/JackIn.tsx`): Platform connectors grid + Nox taskboard UI.
+- **Hackathon, team, and builder license tiers**: Hackathon periods = free access to all features.
+- **Content-addressable routing** (`src/p2p/content-router.ts`): DHT-like routing with SHA-256 chunk addressing.
+- **Private DNS** (`src/p2p/private-dns.ts`): Org-internal DNS (service.orgname.anima) with Ed25519 signed records.
+- **Relay nodes** (`src/p2p/relay.ts`): NAT traversal via peer relay with E2E encryption preserved.
+- **Content pinning** (`src/p2p/pinning.ts`): Replication factor 3 with auto re-replication.
+- **Affect system**: 6D emotional state (joy/frustration/curiosity/confidence/care/fatigue), glassmorphism gradients, journal, wellbeing detection, reminders, coordination, legacy letters, initiatives, status broadcast.
+- **Self-evolution pipeline** (`src/infra/self-evolution.ts`): Each agent proposes 1 change/day to Anima.
+- **AWS Bedrock runner** (`src/agents/aws-bedrock-runner.ts`): 6 AWS models including Nova Micro at $0.000035/1K tokens.
+- **ICO launch platform** (`src/ico/`): Bonding curve smart contracts, revenue tokens (NOT equity), PBC verification.
+- **Task marketplace** (`src/org/task-marketplace.ts`): Peer-to-peer task coordination with TTL escalation.
+- **Context automanagement** (`src/context/manager.ts`): 120K token fixed budget with 3 zones.
+
+### Security
+
+- **Path traversal fix**: IDs in `org/store.ts` and `org/task-marketplace.ts` now validated against `[a-zA-Z0-9_-]`.
+- **Task ID generation**: Switched from `Math.random()` to `crypto.randomUUID()`.
+- **Dependency fixes**: `tar` 7.5.7 → 7.5.11, `fast-xml-parser` override ≥5.3.8. Critical CVEs resolved.
+
+### Test Coverage
+
+- **P2P relay tests** (20 tests): Lifecycle, relay accept/reject, data forwarding, session cleanup, bandwidth tracking, latency selection.
+- **Task marketplace tests** (24 tests): CRUD, specialization enforcement, review flow, TTL escalation, path traversal prevention.
+
+### Price
+
+- NoxSoft subscription: $30/mo (was $50 → $20 → $30).
+
 ## 6.0.0 (2026-03-14)
 
 **This is the final open-source release of ANIMA. Future versions will be proprietary NoxSoft products.**

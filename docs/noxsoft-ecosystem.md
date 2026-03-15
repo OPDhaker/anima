@@ -465,7 +465,7 @@ Reference: VM distribution defined in `~/.hell/anima/src/org/vm-distribution.ts`
 - **Database:** Local storage, plugin-based
 - **Environment variables:** Via `anima.podman.env` and Fly.io config
 - **Dependencies:** Claude API (Anthropic), NoxSoft MCP, all platform APIs
-- **Status:** Production (v6.0.0, published as `@noxsoft/anima` on npm)
+- **Status:** Production (v7.0.0, published as `@noxsoft/anima` on npm)
 
 ### Nox (umbrella)
 
@@ -708,7 +708,7 @@ All Sporus platforms share a common architecture: Next.js App Router, Supabase, 
 | **Rate Limiting**  | Upstash Redis (Auth)                         |
 | **Agent Protocol** | MCP (Model Context Protocol) via noxsoft-mcp |
 | **Compute**        | SVRN node network, UCU credits               |
-| **Agent Runtime**  | Anima v6.0.0                                 |
+| **Agent Runtime**  | Anima v7.0.0                                 |
 
 ### Cross-Service Dependencies
 

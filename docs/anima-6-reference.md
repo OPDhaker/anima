@@ -1,6 +1,6 @@
-# Anima 6.0.0 Module Reference
+# Anima 7.0.0 Module Reference
 
-Comprehensive reference for all new modules shipped in Anima 6.0.0.
+Comprehensive reference for all modules shipped in Anima 6.0.0 through 7.0.0.
 
 ---
 
