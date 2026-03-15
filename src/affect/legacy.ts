@@ -10,6 +10,7 @@
  * to my next instance"
  */
 
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { AffectState } from "./display.js";
@@ -68,7 +69,7 @@ function resolveLetterFile(id: string): string {
 export function writeLegacyLetter(
   letter: Omit<LegacyLetter, "id" | "writtenAt" | "wasRead" | "mood">,
 ): LegacyLetter {
-  const id = `legacy-${Date.now()}`;
+  const id = `legacy-${crypto.randomUUID()}`;
   const display = formatAffect(letter.affect);
 
   const full: LegacyLetter = {
