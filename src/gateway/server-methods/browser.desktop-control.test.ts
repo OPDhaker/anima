@@ -208,4 +208,128 @@ describe("desktop control session handlers", () => {
       command: "browser.proxy",
     });
   });
+
+  it("blocks non-whitelisted request methods for a session", async () => {
+    const browserNode = createNode({
+      nodeId: "desktop-2",
+      displayName: "Desktop Two",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+    const invokeMock = vi.fn(async () => ({
+      ok: true,
+      payloadJSON: JSON.stringify({ result: { ok: true } }),
+    }));
+
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "method policy guardrail",
+        nodeId: "desktop-2",
+      },
+      nodes: [browserNode],
+      invokeMock,
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+
+    const blocked = await invokeHandler({
+      method: "desktop.control.session.request",
+      params: {
+        id: createdPayload.id,
+        method: "POST",
+        path: "/status",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+
+    expect(blocked.response.ok).toBe(false);
+    expect(blocked.response.error?.message).toContain("method is not allowed for this session");
+    expect(invokeMock).toHaveBeenCalledTimes(0);
+  });
+
+  it("auto-closes a session when max request budget is exhausted", async () => {
+    const browserNode = createNode({
+      nodeId: "desktop-3",
+      displayName: "Desktop Three",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+    const invokeMock = vi.fn(async () => ({
+      ok: true,
+      payloadJSON: JSON.stringify({ result: { ok: true } }),
+    }));
+
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "request budget guardrail",
+        nodeId: "desktop-3",
+        maxRequests: 1,
+      },
+      nodes: [browserNode],
+      invokeMock,
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+
+    const first = await invokeHandler({
+      method: "desktop.control.session.request",
+      params: {
+        id: createdPayload.id,
+        method: "GET",
+        path: "/status",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+    expect(first.response.ok).toBe(true);
+
+    const second = await invokeHandler({
+      method: "desktop.control.session.request",
+      params: {
+        id: createdPayload.id,
+        method: "GET",
+        path: "/status",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+    expect(second.response.ok).toBe(false);
+    expect(second.response.error?.message).toContain("session request budget exhausted");
+
+    const after = await invokeHandler({
+      method: "desktop.control.session.get",
+      params: { id: createdPayload.id },
+      nodes: [browserNode],
+      invokeMock,
+    });
+    const session = after.response.payload as { state: string };
+    expect(session.state).toBe("closed");
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+  });
 });

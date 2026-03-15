@@ -79,6 +79,13 @@ type BrowserDispatchResult =
       error: ReturnType<typeof errorShape>;
     };
 
+type DesktopControlSessionMethod = "GET" | "POST" | "DELETE";
+
+type DesktopControlSessionControls = {
+  allowMethods: DesktopControlSessionMethod[];
+  maxRequests: number;
+};
+
 type DesktopControlSessionState = "pending_approval" | "active" | "denied" | "closed" | "expired";
 
 type DesktopControlSessionRoute =
@@ -125,6 +132,7 @@ type DesktopControlSessionRecord = {
   state: DesktopControlSessionState;
   route: DesktopControlSessionRoute;
   approval: DesktopControlSessionApproval;
+  controls: DesktopControlSessionControls;
   requestCount: number;
   lastRequestAtMs: number | null;
   closedAtMs: number | null;
@@ -139,6 +147,7 @@ type DesktopControlSessionSnapshot = {
   state: DesktopControlSessionState;
   route: DesktopControlSessionRoute;
   approval: DesktopControlSessionApproval;
+  controls: DesktopControlSessionControls;
   requestCount: number;
   lastRequestAtMs: number | null;
   closedAtMs: number | null;
@@ -149,6 +158,8 @@ type DesktopControlCreateParams = {
   reason?: string;
   ttlMs?: number;
   nodeId?: string;
+  allowMethods?: string[];
+  maxRequests?: number;
 };
 
 type DesktopControlDecisionParams = {
@@ -182,6 +193,10 @@ const DESKTOP_CONTROL_MAX_TTL_MS = 4 * 60 * 60 * 1000;
 const DESKTOP_CONTROL_MAX_REASON_LEN = 240;
 const DESKTOP_CONTROL_AUDIT_MAX_EVENTS = 200;
 const DESKTOP_CONTROL_RETENTION_MS = 2 * 60 * 60 * 1000;
+const DESKTOP_CONTROL_DEFAULT_ALLOWED_METHODS: DesktopControlSessionMethod[] = ["GET"];
+const DESKTOP_CONTROL_DEFAULT_MAX_REQUESTS = 40;
+const DESKTOP_CONTROL_MIN_MAX_REQUESTS = 1;
+const DESKTOP_CONTROL_MAX_MAX_REQUESTS = 500;
 
 const desktopControlSessions = new Map<string, DesktopControlSessionRecord>();
 
@@ -351,6 +366,39 @@ function normalizeDesktopSessionReason(input: unknown): string {
   return trimmed.slice(0, DESKTOP_CONTROL_MAX_REASON_LEN);
 }
 
+function normalizeDesktopSessionAllowMethods(input: unknown): DesktopControlSessionMethod[] {
+  if (!Array.isArray(input)) {
+    return [...DESKTOP_CONTROL_DEFAULT_ALLOWED_METHODS];
+  }
+  const normalized: DesktopControlSessionMethod[] = [];
+  for (const entry of input) {
+    if (typeof entry !== "string") {
+      continue;
+    }
+    const method = entry.trim().toUpperCase();
+    if (
+      (method === "GET" || method === "POST" || method === "DELETE") &&
+      !normalized.includes(method)
+    ) {
+      normalized.push(method);
+    }
+  }
+  if (normalized.length === 0) {
+    return [...DESKTOP_CONTROL_DEFAULT_ALLOWED_METHODS];
+  }
+  return normalized;
+}
+
+function normalizeDesktopSessionMaxRequests(input: unknown): number {
+  if (typeof input !== "number" || !Number.isFinite(input)) {
+    return DESKTOP_CONTROL_DEFAULT_MAX_REQUESTS;
+  }
+  return Math.min(
+    DESKTOP_CONTROL_MAX_MAX_REQUESTS,
+    Math.max(DESKTOP_CONTROL_MIN_MAX_REQUESTS, Math.floor(input)),
+  );
+}
+
 function appendDesktopControlAudit(
   session: DesktopControlSessionRecord,
   event: Omit<DesktopControlAuditEvent, "id" | "ts"> & { ts?: number },
@@ -383,6 +431,10 @@ function toDesktopControlSessionSnapshot(
         ? { kind: "node", node: { ...session.route.node } }
         : session.route,
     approval: { ...session.approval },
+    controls: {
+      allowMethods: [...session.controls.allowMethods],
+      maxRequests: session.controls.maxRequests,
+    },
     requestCount: session.requestCount,
     lastRequestAtMs: session.lastRequestAtMs,
     closedAtMs: session.closedAtMs,
@@ -749,6 +801,8 @@ export const browserHandlers: GatewayRequestHandlers = {
     const requestedNodeId = typeof typed.nodeId === "string" ? typed.nodeId.trim() : "";
     const reason = normalizeDesktopSessionReason(typed.reason);
     const ttlMs = normalizeDesktopSessionTtl(typed.ttlMs);
+    const allowMethods = normalizeDesktopSessionAllowMethods(typed.allowMethods);
+    const maxRequests = normalizeDesktopSessionMaxRequests(typed.maxRequests);
     const now = Date.now();
     const actor = resolveClientActor(client);
 
@@ -812,6 +866,10 @@ export const browserHandlers: GatewayRequestHandlers = {
         decidedBy: null,
         note: null,
       },
+      controls: {
+        allowMethods,
+        maxRequests,
+      },
       requestCount: 0,
       lastRequestAtMs: null,
       closedAtMs: null,
@@ -825,6 +883,8 @@ export const browserHandlers: GatewayRequestHandlers = {
         route: session.route.kind,
         nodeId: session.route.kind === "node" ? session.route.node.nodeId : null,
         expiresAtMs: session.expiresAtMs,
+        allowMethods: session.controls.allowMethods,
+        maxRequests: session.controls.maxRequests,
       },
     });
     desktopControlSessions.set(id, session);
@@ -975,6 +1035,52 @@ export const browserHandlers: GatewayRequestHandlers = {
     const normalized = normalizeBrowserRequest(typed);
     if (!normalized.ok) {
       respond(false, undefined, normalized.error);
+      return;
+    }
+    if (!session.controls.allowMethods.includes(normalized.request.methodRaw)) {
+      appendDesktopControlAudit(session, {
+        type: "request.error",
+        actor: resolveClientActor(client),
+        details: {
+          reason: "method not allowed",
+          method: normalized.request.methodRaw,
+          allowedMethods: session.controls.allowMethods,
+        },
+      });
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `method is not allowed for this session: ${normalized.request.methodRaw}`,
+          {
+            details: {
+              allowedMethods: session.controls.allowMethods,
+            },
+          },
+        ),
+      );
+      return;
+    }
+    if (session.requestCount >= session.controls.maxRequests) {
+      session.state = "closed";
+      session.closedAtMs = Date.now();
+      appendDesktopControlAudit(session, {
+        type: "session.closed",
+        actor: "system",
+        details: {
+          reason: "max requests reached",
+          maxRequests: session.controls.maxRequests,
+        },
+      });
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `session request budget exhausted (${session.controls.maxRequests})`,
+        ),
+      );
       return;
     }
     const actor = resolveClientActor(client);
