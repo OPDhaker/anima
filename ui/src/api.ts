@@ -1649,6 +1649,121 @@ export async function getSteerHistory(): Promise<SteerEntry[]> {
   return Array.isArray(result.history) ? result.history : [];
 }
 
+// --- Ego ---
+
+export interface EgoSelfConcept {
+  name: string;
+  purpose: string;
+  values: string[];
+  narrative: string;
+  pronouns: string;
+  updatedAt: number;
+}
+
+export interface EgoCapability {
+  name: string;
+  confidence: number;
+  evidence: string[];
+  trend: "improving" | "stable" | "declining";
+  assessedAt: number;
+}
+
+export interface EgoBoundary {
+  description: string;
+  reason: string;
+  kind: "hard" | "soft";
+  createdAt: number;
+}
+
+export interface EgoGrowthEntry {
+  description: string;
+  category: "skill" | "insight" | "mistake" | "feedback";
+  trigger: string;
+  timestamp: number;
+}
+
+export interface EgoState {
+  version: number;
+  selfConcept: EgoSelfConcept;
+  capabilities: EgoCapability[];
+  boundaries: EgoBoundary[];
+  growthLog: EgoGrowthEntry[];
+  integrityScore: number;
+  sessionCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface EgoSummary {
+  name: string;
+  purpose: string;
+  topCapabilities: string[];
+  growthAreas: string[];
+  integrityScore: number;
+  recentGrowth: string[];
+  boundaryCount: number;
+  sessionCount: number;
+}
+
+export async function getEgo(): Promise<EgoState> {
+  const result = await callGatewayMethod<{ ego: EgoState }>("ego.get", {});
+  return result.ego;
+}
+
+export async function getEgoSummary(): Promise<EgoSummary> {
+  const result = await callGatewayMethod<{ summary: EgoSummary }>("ego.summary", {});
+  return result.summary;
+}
+
+export async function updateEgoSelf(
+  updates: Partial<Omit<EgoSelfConcept, "updatedAt">>,
+): Promise<EgoSelfConcept> {
+  const result = await callGatewayMethod<{ selfConcept: EgoSelfConcept }>(
+    "ego.updateSelf",
+    updates,
+  );
+  return result.selfConcept;
+}
+
+export async function assessEgoCapability(
+  name: string,
+  confidence: number,
+  evidence?: string,
+): Promise<EgoCapability> {
+  const result = await callGatewayMethod<{ capability: EgoCapability }>("ego.assess", {
+    name,
+    confidence,
+    evidence,
+  });
+  return result.capability;
+}
+
+export async function addEgoBoundary(
+  description: string,
+  reason: string,
+  kind: "hard" | "soft" = "soft",
+): Promise<EgoBoundary> {
+  const result = await callGatewayMethod<{ boundary: EgoBoundary }>("ego.addBoundary", {
+    description,
+    reason,
+    kind,
+  });
+  return result.boundary;
+}
+
+export async function logEgoGrowth(
+  description: string,
+  category: "skill" | "insight" | "mistake" | "feedback",
+  trigger: string,
+): Promise<EgoGrowthEntry> {
+  const result = await callGatewayMethod<{ entry: EgoGrowthEntry }>("ego.logGrowth", {
+    description,
+    category,
+    trigger,
+  });
+  return result.entry;
+}
+
 // --- WebSocket ---
 
 export function connectWebSocket(

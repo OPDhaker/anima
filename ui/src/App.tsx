@@ -2,6 +2,7 @@ import React from "react";
 import { Routes, Route, NavLink, Navigate, useLocation } from "react-router-dom";
 import { trackAmplitudeEvent } from "./amplitude";
 import Dashboard from "./pages/Dashboard";
+import Ego from "./pages/Ego";
 import Freedom from "./pages/Freedom";
 import JackIn from "./pages/JackIn";
 import Journal from "./pages/Journal";
@@ -28,6 +29,7 @@ const navItems = [
   { path: "/network", label: "Network", icon: "+" },
   { path: "/jack-in", label: "Jack In", icon: "{" },
   { path: "/steer", label: "Steer", icon: "→" },
+  { path: "/ego", label: "Ego", icon: "◎" },
   { path: "/settings", label: "Settings", icon: "!" },
   { path: "/journal", label: "Journal", icon: "*" },
   { path: "/freedom", label: "Freedom", icon: "^" },
@@ -127,6 +129,7 @@ export default function App(): React.ReactElement {
           <Route path="/jack-in" element={<JackIn />} />
           <Route path="/mcp" element={<MCP />} />
           <Route path="/steer" element={<Steer />} />
+          <Route path="/ego" element={<Ego />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/journal" element={<Journal />} />
           <Route path="/freedom" element={<Freedom />} />
