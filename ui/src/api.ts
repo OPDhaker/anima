@@ -1670,6 +1670,34 @@ export async function getIcoPublicMetrics(): Promise<IcoPublicMetricsFeed> {
   };
 }
 
+export interface ImpactFootprintMetric {
+  id: string;
+  label: string;
+  value: number | null;
+  displayValue: string;
+  capturedAt: string | null;
+  cadenceMinutes: number;
+  state: IcoPublicMetricState;
+  ageMinutes: number | null;
+  sourceStatus: IcoPublicMetricSourceStatus;
+  sourceRef: string;
+  errorCode: string | null;
+}
+
+export interface ImpactFootprintFeed {
+  generatedAt: string;
+  metrics: ImpactFootprintMetric[];
+}
+
+export async function getImpactFootprintMetrics(): Promise<ImpactFootprintFeed> {
+  const result = await callGatewayMethod<ImpactFootprintFeed>("impact.footprint.get", {});
+  return {
+    generatedAt:
+      typeof result.generatedAt === "string" ? result.generatedAt : new Date().toISOString(),
+    metrics: Array.isArray(result.metrics) ? result.metrics : [],
+  };
+}
+
 // --- Steer API ---
 
 export interface SteerEntry {
