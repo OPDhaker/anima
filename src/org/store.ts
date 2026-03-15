@@ -78,8 +78,8 @@ export interface OrgInvite {
 // ---------------------------------------------------------------------------
 
 function readOrgFile(orgId: string): StoredOrg | null {
-  const filePath = resolveOrgFile(orgId);
   try {
+    const filePath = resolveOrgFile(orgId);
     if (!fs.existsSync(filePath)) {
       return null;
     }
@@ -185,8 +185,8 @@ export function updateOrganization(
 }
 
 export function deleteOrganization(orgId: string): boolean {
-  const filePath = resolveOrgFile(orgId);
   try {
+    const filePath = resolveOrgFile(orgId);
     fs.unlinkSync(filePath);
     log.info(`deleted organization: ${orgId}`);
     return true;
