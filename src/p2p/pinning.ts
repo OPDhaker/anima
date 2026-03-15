@@ -448,7 +448,7 @@ export class PinningManager extends EventEmitter {
       };
 
       // Broadcast to all peers — let them decide if they can accept
-      const sent = this.mesh.broadcast("pin.request" as any, payload);
+      const sent = this.mesh.broadcast("pin.request", payload);
       if (sent === 0) {
         clearTimeout(timer);
         this.pendingPinRequests.delete(requestId);
@@ -471,7 +471,7 @@ export class PinningManager extends EventEmitter {
       accepted,
       reason,
     };
-    this.mesh.send(peerId, "pin.ack" as any, payload);
+    this.mesh.send(peerId, "pin.ack", payload);
   }
 
   // -----------------------------------------------------------------------

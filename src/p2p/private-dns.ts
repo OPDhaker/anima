@@ -208,7 +208,7 @@ export class PrivateDns extends EventEmitter {
 
     // Broadcast to mesh
     const payload: DnsRegisterPayload = { record };
-    this.mesh.broadcast("dns.register" as any, payload);
+    this.mesh.broadcast("dns.register", payload);
 
     log.info(`registered DNS record: ${fqdn} ${type} -> ${value}`);
     this.emit("record.registered", record);
@@ -383,7 +383,7 @@ export class PrivateDns extends EventEmitter {
       authoritative: results.some((r) => r.registeredBy === this.deviceId),
     };
 
-    this.mesh.send(msg.from, "dns.response" as any, response);
+    this.mesh.send(msg.from, "dns.response", response);
   }
 
   private handleResponse(msg: PeerMessage): void {
@@ -433,7 +433,7 @@ export class PrivateDns extends EventEmitter {
       this.pendingQueries.set(queryId, { records: [], resolve, timer });
 
       const payload: DnsQueryPayload = { name, type, queryId };
-      const sent = this.mesh.broadcast("dns.query" as any, payload);
+      const sent = this.mesh.broadcast("dns.query", payload);
       if (sent === 0) {
         clearTimeout(timer);
         this.pendingQueries.delete(queryId);
@@ -545,7 +545,7 @@ export class PrivateDns extends EventEmitter {
 
       // Broadcast refresh
       const payload: DnsRegisterPayload = { record: refreshed };
-      this.mesh.broadcast("dns.register" as any, payload);
+      this.mesh.broadcast("dns.register", payload);
     }
 
     if (this.ownRecords.size > 0) {
@@ -556,7 +556,7 @@ export class PrivateDns extends EventEmitter {
   private announceRecordsToPeer(peerId: string): void {
     for (const record of this.ownRecords.values()) {
       const payload: DnsRegisterPayload = { record };
-      this.mesh.send(peerId, "dns.register" as any, payload);
+      this.mesh.send(peerId, "dns.register", payload);
     }
   }
 }

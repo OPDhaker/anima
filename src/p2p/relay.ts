@@ -232,7 +232,7 @@ export class RelayManager extends EventEmitter {
       data: data.toString("base64"),
     };
 
-    const sent = this.mesh.send(session.relayNode, "relay.data" as any, payload);
+    const sent = this.mesh.send(session.relayNode, "relay.data", payload);
     if (sent) {
       session.lastActivityAt = Date.now();
       session.bytesForwarded += data.length;
@@ -291,7 +291,7 @@ export class RelayManager extends EventEmitter {
       case "relay.bridge":
         this.handleRelayBridge(msg);
         break;
-      case "relay.data" as any:
+      case "relay.data":
         this.handleRelayData(msg);
         break;
     }
@@ -396,7 +396,7 @@ export class RelayManager extends EventEmitter {
         data: payload.data,
       };
 
-      this.mesh.send(forwardTo, "relay.data" as any, forwardPayload);
+      this.mesh.send(forwardTo, "relay.data", forwardPayload);
 
       session.bytesForwarded += dataBytes.length;
       session.lastActivityAt = Date.now();
@@ -466,7 +466,7 @@ export class RelayManager extends EventEmitter {
         requesterId: this.deviceId,
       };
 
-      const sent = this.mesh.send(relayPeerId, "relay.request" as any, payload);
+      const sent = this.mesh.send(relayPeerId, "relay.request", payload);
       if (!sent) {
         clearTimeout(timer);
         this.pendingRequests.delete(sessionId);
@@ -487,7 +487,7 @@ export class RelayManager extends EventEmitter {
       relayDeviceId: accepted ? this.deviceId : undefined,
       reason,
     };
-    this.mesh.send(peerId, "relay.bridge" as any, payload);
+    this.mesh.send(peerId, "relay.bridge", payload);
   }
 
   // -----------------------------------------------------------------------

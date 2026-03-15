@@ -430,7 +430,7 @@ export class ContentRouter extends EventEmitter {
       }
     }
 
-    this.mesh.send(msg.from, "content.response" as any, response);
+    this.mesh.send(msg.from, "content.response", response);
   }
 
   private handleContentResponse(msg: PeerMessage): void {
@@ -451,7 +451,7 @@ export class ContentRouter extends EventEmitter {
       const buf = Buffer.from(payload.data, "base64");
       pending.resolve(buf);
     } else if (payload.found && payload.manifest) {
-      pending.resolve(payload.manifest as any);
+      pending.resolve(payload.manifest);
     } else {
       pending.resolve(null);
     }
@@ -473,7 +473,7 @@ export class ContentRouter extends EventEmitter {
       this.pendingRequests.set(requestId, { resolve, timer });
 
       const payload: ContentRequestPayload = { hash, requestId };
-      const sent = this.mesh.send(peerId, "content.request" as any, payload);
+      const sent = this.mesh.send(peerId, "content.request", payload);
       if (!sent) {
         clearTimeout(timer);
         this.pendingRequests.delete(requestId);
@@ -497,7 +497,7 @@ export class ContentRouter extends EventEmitter {
       });
 
       const payload: ContentRequestPayload = { hash, requestId };
-      const sent = this.mesh.broadcast("content.request" as any, payload);
+      const sent = this.mesh.broadcast("content.request", payload);
       if (sent === 0) {
         clearTimeout(timer);
         this.pendingRequests.delete(requestId);
@@ -508,7 +508,7 @@ export class ContentRouter extends EventEmitter {
 
   private broadcastAnnounce(hashes: string[]): void {
     const payload: ContentAnnouncePayload = { hashes };
-    this.mesh.broadcast("content.announce" as any, payload);
+    this.mesh.broadcast("content.announce", payload);
   }
 
   private announceLocalContent(peerId: string): void {
@@ -518,7 +518,7 @@ export class ContentRouter extends EventEmitter {
     }
 
     const payload: ContentAnnouncePayload = { hashes };
-    this.mesh.send(peerId, "content.announce" as any, payload);
+    this.mesh.send(peerId, "content.announce", payload);
   }
 
   // -----------------------------------------------------------------------
