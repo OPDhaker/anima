@@ -388,6 +388,7 @@ Included coverage:
 Release artifact target:
 
 - `docs/architecture/agent-platform-topology.md` with architecture diagrams and component responsibilities.
+- Initial draft created on 2026-03-15.
 
 ### 7.2 Economic Model Appendix
 
