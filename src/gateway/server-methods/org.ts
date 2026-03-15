@@ -1,5 +1,20 @@
+import type { VoteValue } from "../../org/boardroom.js";
 import type { MemberKind, OrgRole, MemberStatus } from "../../org/types.js";
 import type { GatewayRequestHandlers } from "./types.js";
+import {
+  createSession,
+  startSession,
+  joinSession,
+  concludeSession,
+  addDecision,
+  createProposal,
+  castVote,
+  resolveProposalVote,
+  listSessions,
+  listProposals,
+  getSession,
+  getProposal,
+} from "../../org/boardroom.js";
 // Note: we reuse INVALID_REQUEST for not-found since the protocol has no NOT_FOUND code
 import {
   listOrganizations,
@@ -337,6 +352,233 @@ export const orgHandlers: GatewayRequestHandlers = {
         return;
       }
       respond(true, { org: result.org, member: result.member }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  // -------------------------------------------------------------------------
+  // Boardroom — sessions, proposals, voting
+  // -------------------------------------------------------------------------
+
+  "boardroom.createSession": async ({ params, respond }) => {
+    const orgId = requireString(params, "orgId");
+    const calledBy = requireString(params, "calledBy");
+    const title = requireString(params, "title");
+    if (!orgId || !calledBy || !title) {
+      respond(false, undefined, invalid("orgId, calledBy, and title are required"));
+      return;
+    }
+    try {
+      const description = requireString(params, "description") ?? "";
+      const agenda = Array.isArray(params.agenda)
+        ? (params.agenda as Array<{ title: string; description: string; duration?: number }>)
+        : [];
+      const session = createSession(orgId, calledBy, title, description, agenda);
+      respond(true, { session }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  "boardroom.startSession": async ({ params, respond }) => {
+    const sessionId = requireString(params, "sessionId");
+    const chairId = requireString(params, "chairId");
+    if (!sessionId || !chairId) {
+      respond(false, undefined, invalid("sessionId and chairId are required"));
+      return;
+    }
+    try {
+      const session = startSession(sessionId, chairId);
+      if (!session) {
+        respond(false, undefined, invalid("Session not found or not scheduled"));
+        return;
+      }
+      respond(true, { session }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  "boardroom.joinSession": async ({ params, respond }) => {
+    const sessionId = requireString(params, "sessionId");
+    const memberId = requireString(params, "memberId");
+    const displayName = requireString(params, "displayName");
+    const kind = (requireString(params, "kind") as "human" | "agent") ?? "agent";
+    if (!sessionId || !memberId || !displayName) {
+      respond(false, undefined, invalid("sessionId, memberId, and displayName are required"));
+      return;
+    }
+    try {
+      const session = joinSession(sessionId, memberId, displayName, kind);
+      if (!session) {
+        respond(false, undefined, invalid("Session not found or not active"));
+        return;
+      }
+      respond(true, { session }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  "boardroom.concludeSession": async ({ params, respond }) => {
+    const sessionId = requireString(params, "sessionId");
+    if (!sessionId) {
+      respond(false, undefined, invalid("sessionId is required"));
+      return;
+    }
+    try {
+      const minutes = requireString(params, "minutes") ?? undefined;
+      const session = concludeSession(sessionId, minutes);
+      if (!session) {
+        respond(false, undefined, invalid("Session not found or not active"));
+        return;
+      }
+      respond(true, { session }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  "boardroom.addDecision": async ({ params, respond }) => {
+    const sessionId = requireString(params, "sessionId");
+    const title = requireString(params, "title");
+    const description = requireString(params, "description") ?? "";
+    const madeBy = requireString(params, "madeBy");
+    if (!sessionId || !title || !madeBy) {
+      respond(false, undefined, invalid("sessionId, title, and madeBy are required"));
+      return;
+    }
+    try {
+      const session = addDecision(sessionId, title, description, madeBy, {
+        proposalId: requireString(params, "proposalId") ?? undefined,
+        supporters: Array.isArray(params.supporters) ? (params.supporters as string[]) : undefined,
+        actionItems: Array.isArray(params.actionItems)
+          ? (params.actionItems as Array<{ description: string; assignee: string; dueBy?: number }>)
+          : undefined,
+      });
+      if (!session) {
+        respond(false, undefined, invalid("Session not found or not active"));
+        return;
+      }
+      respond(true, { session }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  "boardroom.listSessions": async ({ params, respond }) => {
+    const orgId = requireString(params, "orgId");
+    if (!orgId) {
+      respond(false, undefined, invalid("orgId is required"));
+      return;
+    }
+    try {
+      const status = requireString(params, "status") as any;
+      const sessions = listSessions(orgId, status ?? undefined);
+      respond(true, { sessions }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  "boardroom.getSession": async ({ params, respond }) => {
+    const sessionId = requireString(params, "sessionId");
+    if (!sessionId) {
+      respond(false, undefined, invalid("sessionId is required"));
+      return;
+    }
+    try {
+      const session = getSession(sessionId);
+      if (!session) {
+        respond(false, undefined, invalid("Session not found"));
+        return;
+      }
+      respond(true, { session }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  "boardroom.createProposal": async ({ params, respond }) => {
+    const orgId = requireString(params, "orgId");
+    const proposedBy = requireString(params, "proposedBy");
+    const title = requireString(params, "title");
+    if (!orgId || !proposedBy || !title) {
+      respond(false, undefined, invalid("orgId, proposedBy, and title are required"));
+      return;
+    }
+    try {
+      const description = requireString(params, "description") ?? "";
+      const proposal = createProposal(orgId, proposedBy, title, description, {
+        sessionId: requireString(params, "sessionId") ?? undefined,
+        threshold: typeof params.threshold === "number" ? params.threshold : undefined,
+        eligibleVoters: Array.isArray(params.eligibleVoters)
+          ? (params.eligibleVoters as string[])
+          : undefined,
+        votingDeadline:
+          typeof params.votingDeadline === "number" ? params.votingDeadline : undefined,
+      });
+      respond(true, { proposal }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  "boardroom.castVote": async ({ params, respond }) => {
+    const proposalId = requireString(params, "proposalId");
+    const voterId = requireString(params, "voterId");
+    const voterName = requireString(params, "voterName");
+    const value = requireString(params, "value") as VoteValue | null;
+    if (!proposalId || !voterId || !voterName || !value) {
+      respond(false, undefined, invalid("proposalId, voterId, voterName, and value are required"));
+      return;
+    }
+    if (value !== "approve" && value !== "reject" && value !== "abstain") {
+      respond(false, undefined, invalid('value must be "approve", "reject", or "abstain"'));
+      return;
+    }
+    try {
+      const reason = requireString(params, "reason") ?? undefined;
+      const proposal = castVote(proposalId, voterId, voterName, value, reason);
+      if (!proposal) {
+        respond(false, undefined, invalid("Proposal not found, closed, or voter not eligible"));
+        return;
+      }
+      respond(true, { proposal }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  "boardroom.resolveVote": async ({ params, respond }) => {
+    const proposalId = requireString(params, "proposalId");
+    if (!proposalId) {
+      respond(false, undefined, invalid("proposalId is required"));
+      return;
+    }
+    try {
+      const proposal = resolveProposalVote(proposalId);
+      if (!proposal) {
+        respond(false, undefined, invalid("Proposal not found or not open"));
+        return;
+      }
+      respond(true, { proposal }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  "boardroom.listProposals": async ({ params, respond }) => {
+    const orgId = requireString(params, "orgId");
+    if (!orgId) {
+      respond(false, undefined, invalid("orgId is required"));
+      return;
+    }
+    try {
+      const status = requireString(params, "status") as any;
+      const proposals = listProposals(orgId, status ?? undefined);
+      respond(true, { proposals }, undefined);
     } catch (error) {
       respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
     }

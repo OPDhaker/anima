@@ -81,3 +81,28 @@ export {
   checkEscalations,
   type EscalationResult,
 } from "./task-marketplace.js";
+
+export {
+  type BoardroomSession,
+  type SessionStatus,
+  type AgendaItem,
+  type SessionParticipant,
+  type Proposal,
+  type ProposalStatus,
+  type Vote,
+  type VoteValue,
+  type Decision,
+  type ActionItem,
+  createSession,
+  startSession,
+  joinSession,
+  concludeSession,
+  addDecision,
+  createProposal,
+  castVote,
+  resolveProposalVote,
+  listSessions,
+  listProposals,
+  getSession,
+  getProposal,
+} from "./boardroom.js";
