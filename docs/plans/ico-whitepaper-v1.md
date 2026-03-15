@@ -455,7 +455,7 @@ Included coverage:
 
 Release artifact target:
 
-- `docs/compliance/ico-participation-policy-v1.md`.
+- `docs/compliance/ico-participation-policy-v1.md` (initial draft created).
 
 ### 7.6 Branding and Messaging Appendix (Marketing Track)
 
@@ -472,12 +472,12 @@ Included coverage:
 
 Release artifact target:
 
-- `docs/marketing/brand-positioning-v1.md` and `docs/marketing/progress-proof-template.md`.
+- `docs/marketing/brand-positioning-v1.md` and `docs/marketing/progress-proof-template.md` (initial drafts created).
 
 ---
 
 ## Next Steps
 
-- Convert each Appendix artifact target into dedicated docs files and link them from this whitepaper.
+- Convert remaining Appendix artifact targets into dedicated docs files and link them from this whitepaper.
 - Add metric tables and launch-readiness criteria per roadmap phase.
 - Align legal/compliance wording with final counsel review packet and counsel-approved disclaimer text.
