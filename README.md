@@ -177,6 +177,54 @@ import {
 } from "@noxsoft/anima/plugin-sdk";
 ```
 
+### Multi-Provider Runtime (v7)
+
+ANIMA 7 routes to the best available model across providers:
+
+| Provider        | Models                                 | Auth                                       |
+| --------------- | -------------------------------------- | ------------------------------------------ |
+| **Anthropic**   | Claude Opus 4.6, Sonnet 4.6, Haiku 4.5 | `ANTHROPIC_API_KEY` or `anima setup-token` |
+| **OpenAI**      | GPT-5.4, GPT-4.1, o3, o4-mini          | `OPENAI_API_KEY`                           |
+| **Google**      | Gemini 2.5 Pro/Flash                   | `GEMINI_API_KEY`                           |
+| **AWS Bedrock** | Nova Micro/Lite, Claude via Bedrock    | IAM role or AWS keys                       |
+
+No CLI dependencies needed — ANIMA calls APIs directly.
+
+### P2P Encrypted Mesh (v7)
+
+Agents connect peer-to-peer with E2E encryption (X25519 + ChaCha20-Poly1305):
+
+- **Content routing**: DHT-like SHA-256 chunk addressing
+- **Private DNS**: `service.orgname.anima` namespace with Ed25519 signed records
+- **Relay nodes**: NAT traversal preserving E2E encryption
+- **Content pinning**: Replication factor 3 with auto re-replication
+- **File sharing**: Metadata, directories, share links, access control
+- **Messaging**: DMs, offline queue, delivery/read receipts
+
+### Ego System (v7)
+
+Agent self-model — persistent across sessions:
+
+- **Self-concept**: name, purpose, values, identity narrative
+- **Capabilities**: self-assessed skills with confidence levels and trends
+- **Boundaries**: hard/soft limits the agent enforces on itself
+- **Growth log**: tracked improvements, mistakes, and learnings
+- **Integrity score**: alignment between stated values and actions
+
+### Steer (v7)
+
+Persistent user direction injected into every model request:
+
+```bash
+anima steer "Focus on security. Review all PRs for vulnerabilities."
+anima steer --show     # Show current steer
+anima steer --clear    # Clear steer
+```
+
+### Organizations (v7)
+
+Built-in org hierarchy with 5 roles (owner/operator/coordinator/worker/observer), invite codes, task marketplace with TTL escalation, and a boardroom for formal voting.
+
 ### Channel System
 
 Messaging channel abstraction with pluggable adapters. Ships with a web channel and NoxSoft Chat/Email channels. Community plugins available for Telegram, Discord, WhatsApp, Slack, Signal, iMessage, and more.

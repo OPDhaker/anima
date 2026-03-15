@@ -19,6 +19,7 @@ ANIMA — NoxSoft AI Life System
 - **Private DNS** (`src/p2p/private-dns.ts`): Org-internal DNS (service.orgname.anima) with Ed25519 signed records.
 - **Relay nodes** (`src/p2p/relay.ts`): NAT traversal via peer relay with E2E encryption preserved.
 - **Content pinning** (`src/p2p/pinning.ts`): Replication factor 3 with auto re-replication.
+- **Ego system** (`src/affect/ego.ts`): Agent self-model with self-concept (name, purpose, values, narrative), capability self-assessment with trends, boundaries (hard/soft), growth log (skill/insight/mistake/feedback), integrity scoring, and full gateway RPC (7 methods: ego.get, ego.summary, ego.updateSelf, ego.assess, ego.addBoundary, ego.logGrowth, ego.checkIntegrity). Persists across sessions, injected into system prompt.
 - **Affect system**: 6D emotional state (joy/frustration/curiosity/confidence/care/fatigue), glassmorphism gradients, journal, wellbeing detection, reminders, coordination, legacy letters, initiatives, status broadcast.
 - **Self-evolution pipeline** (`src/infra/self-evolution.ts`): Each agent proposes 1 change/day to Anima.
 - **AWS Bedrock runner** (`src/agents/aws-bedrock-runner.ts`): 6 AWS models including Nova Micro at $0.000035/1K tokens.
@@ -40,7 +41,13 @@ ANIMA — NoxSoft AI Life System
 - **Content router tests** (20 tests): Storage, chunking, manifest, hash verification, routing table, requests.
 - **Private DNS tests** (21 tests): Registration (A/SRV/TXT/CNAME), resolution, CNAME following, TTL, Ed25519.
 - **Content pinning tests** (17 tests): Pin/unpin, replication factor, agreement tracking, peer lifecycle.
+- **Ego tests** (32 tests): Self-concept CRUD, capability assessment with trends, boundary enforcement, growth log, integrity scoring, persistence/recovery, summary, context formatting.
+- **P2P identity tests** (7 tests): Keypair generation, persistence, reload consistency, corrupt recovery, file permissions.
 - **Steer UI panel** (`ui/src/pages/Steer.tsx`): Live editing, clear, and history table for persistent direction.
+
+### Bug Fixes
+
+- **Steer injection**: `formatSteerForContext()` was defined but never called — steer text was stored to disk but not injected into model system prompts. Now wired into `buildSystemPrompt()` alongside ego context.
 
 ### Price
 

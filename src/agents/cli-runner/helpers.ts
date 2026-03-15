@@ -8,6 +8,7 @@ import type { ThinkLevel } from "../../auto-reply/thinking.js";
 import type { AnimaConfig } from "../../config/config.js";
 import type { CliBackendConfig } from "../../config/types.js";
 import type { EmbeddedContextFile } from "../pi-embedded-helpers.js";
+import { getEgoManager } from "../../affect/ego.js";
 import { formatSteerForContext } from "../../commands/steer.js";
 import { runExec } from "../../process/exec.js";
 import { buildTtsSystemPromptHint } from "../../tts/tts.js";
@@ -286,8 +287,18 @@ export function buildSystemPrompt(params: {
       shell: detectRuntimeShell(),
     },
   });
-  // Inject steer (persistent user direction) if active
+  // Inject ego (self-model) and steer (persistent user direction) into context
   let resolvedExtraSystemPrompt = params.extraSystemPrompt;
+  try {
+    const egoBlock = getEgoManager().formatForContext();
+    if (egoBlock) {
+      resolvedExtraSystemPrompt = [resolvedExtraSystemPrompt, egoBlock]
+        .filter(Boolean)
+        .join("\n\n");
+    }
+  } catch {
+    // ego not available — skip
+  }
   try {
     const steerBlock = formatSteerForContext();
     if (steerBlock) {
