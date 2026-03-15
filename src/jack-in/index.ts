@@ -39,3 +39,5 @@ export {
   type ResilientFetchConfig,
   type HealthStats,
 } from "./resilience.js";
+
+export { NoxConnector, type NoxTask, type NoxRole, type NoxOrgStatus } from "./nox-connector.js";
