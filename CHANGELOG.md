@@ -52,6 +52,17 @@ ANIMA — NoxSoft AI Life System
 - **Ego tests** (32 tests): Self-concept CRUD, capability assessment with trends, boundary enforcement, growth log, integrity scoring, persistence/recovery, summary, context formatting.
 - **P2P identity tests** (7 tests): Keypair generation, persistence, reload consistency, corrupt recovery, file permissions.
 - **Steer UI panel** (`ui/src/pages/Steer.tsx`): Live editing, clear, and history table for persistent direction.
+- **Self-reflection tests** (22): Performance analysis, pattern detection, trend analysis.
+- **Affect module tests**: journal (16), reminders (17), initiatives (22), legacy (14), gradients (9), status-broadcast (11), gratitude-log (10), opinion-log (11).
+- **ICO tests**: tokenomics (25), verification (14), launch-platform (14).
+- **Learning tests**: critic (17), evaluations (11), learner (5), generator (6).
+- **Sync tests**: brain-sync (16), workspace-sync (16).
+- **Jack In tests**: connector (18), resilience (19).
+- **License tests**: validator (15), stripe-checkout (10).
+- **Infra tests**: auto-update (14), backoff (9), dedupe (9), device-identity (15), liveness-alert (10), diagnostic-flags (18), exec-safety (9), ports-format (9).
+- **Org tests**: boardroom (18), vm-distribution (11), vm-templates (9).
+- **SVRN tests**: compute (9).
+- **607+ total tests across 40+ files — all passing.**
 
 ### Bug Fixes
 
