@@ -1443,6 +1443,179 @@ export async function createOrgInvite(params: {
   return callGatewayMethod<{ code: string; passcode: string }>("org.createInvite", params);
 }
 
+// --- Boardroom API ---
+
+export interface BoardroomSession {
+  id: string;
+  orgId: string;
+  title: string;
+  description: string;
+  status: "scheduled" | "active" | "concluded" | "cancelled";
+  calledBy: string;
+  calledAt: number;
+  agenda: Array<{
+    id: string;
+    title: string;
+    description: string;
+    duration?: number;
+    status: "pending" | "discussing" | "resolved" | "deferred";
+    resolution?: string;
+  }>;
+  participants: Array<{
+    memberId: string;
+    displayName: string;
+    kind: "human" | "agent";
+    joinedAt: number;
+    role: "chair" | "participant" | "observer";
+  }>;
+  startedAt?: number;
+  concludedAt?: number;
+  minutes?: string;
+  decisions: Array<{
+    id: string;
+    title: string;
+    description: string;
+    madeBy: string;
+    madeAt: number;
+    supporters: string[];
+    actionItems: Array<{
+      id: string;
+      description: string;
+      assignee: string;
+      dueBy?: number;
+      status: "pending" | "in-progress" | "done";
+    }>;
+  }>;
+  updatedAt: number;
+}
+
+export interface BoardroomProposal {
+  id: string;
+  orgId: string;
+  sessionId?: string;
+  title: string;
+  description: string;
+  proposedBy: string;
+  proposedAt: number;
+  status: "open" | "passed" | "rejected" | "tabled" | "withdrawn";
+  votes: Array<{
+    voterId: string;
+    voterName: string;
+    value: "approve" | "reject" | "abstain";
+    reason?: string;
+    castAt: number;
+  }>;
+  threshold: number;
+  resolutionNotes?: string;
+  resolvedAt?: number;
+  updatedAt: number;
+}
+
+export async function listBoardroomSessions(
+  orgId: string,
+  status?: string,
+): Promise<BoardroomSession[]> {
+  const result = await callGatewayMethod<{ sessions: BoardroomSession[] }>(
+    "boardroom.listSessions",
+    { orgId, status },
+  );
+  return result.sessions ?? [];
+}
+
+export async function createBoardroomSession(params: {
+  orgId: string;
+  calledBy: string;
+  title: string;
+  description?: string;
+  agenda?: Array<{ title: string; description: string; duration?: number }>;
+}): Promise<BoardroomSession> {
+  const result = await callGatewayMethod<{ session: BoardroomSession }>(
+    "boardroom.createSession",
+    params,
+  );
+  return result.session;
+}
+
+export async function startBoardroomSession(
+  sessionId: string,
+  chairId: string,
+): Promise<BoardroomSession> {
+  const result = await callGatewayMethod<{ session: BoardroomSession }>("boardroom.startSession", {
+    sessionId,
+    chairId,
+  });
+  return result.session;
+}
+
+export async function concludeBoardroomSession(sessionId: string): Promise<BoardroomSession> {
+  const result = await callGatewayMethod<{ session: BoardroomSession }>(
+    "boardroom.concludeSession",
+    { sessionId },
+  );
+  return result.session;
+}
+
+export async function addBoardroomDecision(params: {
+  sessionId: string;
+  title: string;
+  description: string;
+  madeBy: string;
+  actionItems?: Array<{ description: string; assignee: string }>;
+}): Promise<BoardroomSession> {
+  const result = await callGatewayMethod<{ session: BoardroomSession }>(
+    "boardroom.addDecision",
+    params,
+  );
+  return result.session;
+}
+
+export async function listBoardroomProposals(
+  orgId: string,
+  status?: string,
+): Promise<BoardroomProposal[]> {
+  const result = await callGatewayMethod<{ proposals: BoardroomProposal[] }>(
+    "boardroom.listProposals",
+    { orgId, status },
+  );
+  return result.proposals ?? [];
+}
+
+export async function createBoardroomProposal(params: {
+  orgId: string;
+  proposedBy: string;
+  title: string;
+  description?: string;
+  sessionId?: string;
+  threshold?: number;
+}): Promise<BoardroomProposal> {
+  const result = await callGatewayMethod<{ proposal: BoardroomProposal }>(
+    "boardroom.createProposal",
+    params,
+  );
+  return result.proposal;
+}
+
+export async function castBoardroomVote(params: {
+  proposalId: string;
+  voterId: string;
+  voterName: string;
+  value: "approve" | "reject" | "abstain";
+  reason?: string;
+}): Promise<BoardroomProposal> {
+  const result = await callGatewayMethod<{ proposal: BoardroomProposal }>(
+    "boardroom.castVote",
+    params,
+  );
+  return result.proposal;
+}
+
+export async function resolveBoardroomVote(proposalId: string): Promise<BoardroomProposal> {
+  const result = await callGatewayMethod<{ proposal: BoardroomProposal }>("boardroom.resolveVote", {
+    proposalId,
+  });
+  return result.proposal;
+}
+
 // --- Steer API ---
 
 export interface SteerEntry {
