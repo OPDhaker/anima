@@ -441,6 +441,7 @@ Included coverage:
 Release artifact target:
 
 - `docs/security/ico-threat-model-v1.md` and `docs/security/incident-response-v1.md`.
+- Initial drafts created on 2026-03-15.
 
 ### 7.5 Compliance and Participation Policy Appendix
 
