@@ -26,6 +26,7 @@ async function invokeHandler(options: {
   nodes?: NodeSession[];
   scopes?: string[];
   invokeMock?: ReturnType<typeof vi.fn>;
+  broadcastMock?: ReturnType<typeof vi.fn>;
 }) {
   const handler = browserHandlers[options.method];
   if (!handler) {
@@ -39,6 +40,7 @@ async function invokeHandler(options: {
       ok: true,
       payloadJSON: JSON.stringify({ result: { ok: true } }),
     }));
+  const broadcast = options.broadcastMock ?? vi.fn();
 
   await handler({
     req: {
@@ -68,6 +70,7 @@ async function invokeHandler(options: {
         listConnected: () => options.nodes ?? [],
         invoke,
       },
+      broadcast,
     } as never,
   });
 
@@ -78,6 +81,7 @@ async function invokeHandler(options: {
   return {
     response,
     invoke,
+    broadcast,
   };
 }
 
@@ -261,6 +265,30 @@ describe("desktop control session handlers", () => {
     expect(requested.response.ok).toBe(true);
     expect(requested.response.payload).toEqual({ pong: true });
     expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(created.broadcast).toHaveBeenCalledWith(
+      "desktop.control.session.updated",
+      expect.objectContaining({
+        action: "created",
+        session: expect.objectContaining({ id: createdPayload.id }),
+      }),
+      expect.objectContaining({ dropIfSlow: true }),
+    );
+    expect(approved.broadcast).toHaveBeenCalledWith(
+      "desktop.control.session.updated",
+      expect.objectContaining({
+        action: "approved",
+        session: expect.objectContaining({ id: createdPayload.id, state: "active" }),
+      }),
+      expect.objectContaining({ dropIfSlow: true }),
+    );
+    expect(requested.broadcast).toHaveBeenCalledWith(
+      "desktop.control.session.updated",
+      expect.objectContaining({
+        action: "request_ok",
+        session: expect.objectContaining({ id: createdPayload.id, requestCount: 1 }),
+      }),
+      expect.objectContaining({ dropIfSlow: true }),
+    );
     expect(invokeMock.mock.calls[0]?.[0]).toMatchObject({
       nodeId: "desktop-1",
       command: "browser.proxy",
@@ -379,6 +407,18 @@ describe("desktop control session handlers", () => {
     });
     expect(second.response.ok).toBe(false);
     expect(second.response.error?.message).toContain("session request budget exhausted");
+    expect(second.broadcast).toHaveBeenCalledWith(
+      "desktop.control.session.updated",
+      expect.objectContaining({
+        action: "closed",
+        actor: "system",
+        details: expect.objectContaining({
+          reason: "max requests reached",
+        }),
+        session: expect.objectContaining({ id: createdPayload.id, state: "closed" }),
+      }),
+      expect.objectContaining({ dropIfSlow: true }),
+    );
 
     const after = await invokeHandler({
       method: "desktop.control.session.get",
@@ -389,5 +429,69 @@ describe("desktop control session handlers", () => {
     const session = after.response.payload as { state: string };
     expect(session.state).toBe("closed");
     expect(invokeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("broadcasts request_error when the pinned node disconnects mid-session", async () => {
+    const browserNode = createNode({
+      nodeId: "desktop-4",
+      displayName: "Desktop Four",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+    const invokeMock = vi.fn(async () => ({
+      ok: true,
+      payloadJSON: JSON.stringify({ result: { ok: true } }),
+    }));
+
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "disconnect guardrail",
+        nodeId: "desktop-4",
+      },
+      nodes: [browserNode],
+      invokeMock,
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+
+    const requestAfterDisconnect = await invokeHandler({
+      method: "desktop.control.session.request",
+      params: {
+        id: createdPayload.id,
+        method: "GET",
+        path: "/status",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [],
+      invokeMock,
+    });
+
+    expect(requestAfterDisconnect.response.ok).toBe(false);
+    expect(requestAfterDisconnect.response.error?.message).toContain(
+      "pinned browser node is not connected",
+    );
+    expect(requestAfterDisconnect.broadcast).toHaveBeenCalledWith(
+      "desktop.control.session.updated",
+      expect.objectContaining({
+        action: "request_error",
+        details: expect.objectContaining({
+          reason: "pinned node disconnected",
+          nodeId: "desktop-4",
+        }),
+      }),
+      expect.objectContaining({ dropIfSlow: true }),
+    );
+    expect(invokeMock).toHaveBeenCalledTimes(0);
   });
 });

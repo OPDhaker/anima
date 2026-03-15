@@ -163,6 +163,15 @@ type DesktopControlSessionSnapshot = {
   audit?: DesktopControlAuditEvent[];
 };
 
+type DesktopControlSessionEventAction =
+  | "created"
+  | "approved"
+  | "denied"
+  | "closed"
+  | "expired"
+  | "request_ok"
+  | "request_error";
+
 type DesktopControlCreateParams = {
   reason?: string;
   ttlMs?: number;
@@ -472,6 +481,28 @@ function toDesktopControlSessionSnapshot(
     closedAtMs: session.closedAtMs,
     audit: includeAudit ? session.audit.map((entry) => ({ ...entry })) : undefined,
   };
+}
+
+function broadcastDesktopControlSessionEvent(params: {
+  context: GatewayRequestContext;
+  action: DesktopControlSessionEventAction;
+  session: DesktopControlSessionRecord;
+  actor: string | null;
+  details?: Record<string, unknown>;
+}) {
+  const latestAudit = params.session.audit[params.session.audit.length - 1];
+  params.context.broadcast(
+    "desktop.control.session.updated",
+    {
+      ts: Date.now(),
+      action: params.action,
+      actor: params.actor,
+      details: params.details,
+      session: toDesktopControlSessionSnapshot(params.session, false),
+      latestAudit: latestAudit ? { ...latestAudit } : null,
+    },
+    { dropIfSlow: true },
+  );
 }
 
 function pruneDesktopControlSessions(now = Date.now()) {
@@ -927,6 +958,12 @@ export const browserHandlers: GatewayRequestHandlers = {
       },
     });
     desktopControlSessions.set(id, session);
+    broadcastDesktopControlSessionEvent({
+      context,
+      action: "created",
+      session,
+      actor,
+    });
     respond(true, toDesktopControlSessionSnapshot(session, true));
   },
   "desktop.control.session.list": async ({ params, respond }) => {
@@ -954,7 +991,7 @@ export const browserHandlers: GatewayRequestHandlers = {
     }
     respond(true, toDesktopControlSessionSnapshot(found.session, typed.includeAudit === true));
   },
-  "desktop.control.session.approve": async ({ params, respond, client }) => {
+  "desktop.control.session.approve": async ({ params, respond, client, context }) => {
     pruneDesktopControlSessions();
     if (!hasOperatorScope(client, "operator.approvals")) {
       respond(
@@ -987,6 +1024,12 @@ export const browserHandlers: GatewayRequestHandlers = {
       session.closedAtMs = Date.now();
       appendDesktopControlAudit(session, {
         type: "session.expired",
+        actor: "system",
+      });
+      broadcastDesktopControlSessionEvent({
+        context,
+        action: "expired",
+        session,
         actor: "system",
       });
       respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "session has expired"));
@@ -1037,9 +1080,18 @@ export const browserHandlers: GatewayRequestHandlers = {
         note: session.approval.note,
       },
     });
+    broadcastDesktopControlSessionEvent({
+      context,
+      action: decisionRaw === "allow" ? "approved" : "denied",
+      session,
+      actor,
+      details: {
+        note: session.approval.note,
+      },
+    });
     respond(true, toDesktopControlSessionSnapshot(session, true));
   },
-  "desktop.control.session.close": async ({ params, respond, client }) => {
+  "desktop.control.session.close": async ({ params, respond, client, context }) => {
     pruneDesktopControlSessions();
     const typed = params as DesktopControlCloseParams;
     const found = ensureDesktopSessionExists(typed.id);
@@ -1058,6 +1110,15 @@ export const browserHandlers: GatewayRequestHandlers = {
     const note = typeof typed.note === "string" && typed.note.trim() ? typed.note.trim() : null;
     appendDesktopControlAudit(session, {
       type: "session.closed",
+      actor: resolveClientActor(client),
+      details: {
+        note,
+      },
+    });
+    broadcastDesktopControlSessionEvent({
+      context,
+      action: "closed",
+      session,
       actor: resolveClientActor(client),
       details: {
         note,
@@ -1085,6 +1146,12 @@ export const browserHandlers: GatewayRequestHandlers = {
         type: "session.expired",
         actor: "system",
       });
+      broadcastDesktopControlSessionEvent({
+        context,
+        action: "expired",
+        session,
+        actor: "system",
+      });
       respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "session has expired"));
       return;
     }
@@ -1093,14 +1160,26 @@ export const browserHandlers: GatewayRequestHandlers = {
       respond(false, undefined, normalized.error);
       return;
     }
+    const actor = resolveClientActor(client);
     if (!session.controls.allowMethods.includes(normalized.request.methodRaw)) {
       appendDesktopControlAudit(session, {
         type: "request.error",
-        actor: resolveClientActor(client),
+        actor,
         details: {
           reason: "method not allowed",
           method: normalized.request.methodRaw,
           allowedMethods: session.controls.allowMethods,
+        },
+      });
+      broadcastDesktopControlSessionEvent({
+        context,
+        action: "request_error",
+        session,
+        actor,
+        details: {
+          reason: "method not allowed",
+          method: normalized.request.methodRaw,
+          allowedMethods: [...session.controls.allowMethods],
         },
       });
       respond(
@@ -1129,6 +1208,16 @@ export const browserHandlers: GatewayRequestHandlers = {
           maxRequests: session.controls.maxRequests,
         },
       });
+      broadcastDesktopControlSessionEvent({
+        context,
+        action: "closed",
+        session,
+        actor: "system",
+        details: {
+          reason: "max requests reached",
+          maxRequests: session.controls.maxRequests,
+        },
+      });
       respond(
         false,
         undefined,
@@ -1139,7 +1228,6 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const actor = resolveClientActor(client);
     appendDesktopControlAudit(session, {
       type: "request.start",
       actor,
@@ -1157,6 +1245,16 @@ export const browserHandlers: GatewayRequestHandlers = {
     if (session.route.kind === "node" && !nodeTarget) {
       appendDesktopControlAudit(session, {
         type: "request.error",
+        actor,
+        details: {
+          reason: "pinned node disconnected",
+          nodeId: session.route.node.nodeId,
+        },
+      });
+      broadcastDesktopControlSessionEvent({
+        context,
+        action: "request_error",
+        session,
         actor,
         details: {
           reason: "pinned node disconnected",
@@ -1192,11 +1290,34 @@ export const browserHandlers: GatewayRequestHandlers = {
           message: result.error.message,
         },
       });
+      broadcastDesktopControlSessionEvent({
+        context,
+        action: "request_error",
+        session,
+        actor,
+        details: {
+          route: result.route,
+          nodeId: result.nodeId,
+          status: result.status,
+          message: result.error.message,
+        },
+      });
       respond(false, undefined, result.error);
       return;
     }
     appendDesktopControlAudit(session, {
       type: "request.ok",
+      actor,
+      details: {
+        route: result.route,
+        nodeId: result.nodeId,
+        status: result.status,
+      },
+    });
+    broadcastDesktopControlSessionEvent({
+      context,
+      action: "request_ok",
+      session,
       actor,
       details: {
         route: result.route,
