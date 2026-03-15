@@ -13,6 +13,8 @@
 import type { ChannelBridge } from "../channels/bridge.js";
 import { AffectCoordinator } from "../affect/coordination.js";
 import { formatAffect, type AffectState } from "../affect/display.js";
+import { ensureDefaultReminders, listReminders, matchCron } from "../affect/reminders.js";
+import { runWellbeingScan } from "../affect/wellbeing.js";
 import { AtmaFailoverManager } from "../infra/atma-failover.js";
 import { JackInManager } from "../jack-in/connector.js";
 import { createDefaultConnectors } from "../jack-in/connectors.js";
@@ -123,6 +125,39 @@ export async function startP2PSubsystem(options: {
     // 6. Set up affect coordination
     const affectCoordinator = new AffectCoordinator(mesh, {});
     log.info("affect coordination started");
+
+    // 6b. Initialize default reminders and start reminder cron
+    try {
+      ensureDefaultReminders();
+      const reminders = listReminders();
+      log.info(`${reminders.filter((r) => r.enabled).length} reminders active`);
+
+      // Check reminders every 60 seconds
+      setInterval(() => {
+        const now = new Date();
+        for (const reminder of listReminders()) {
+          if (!reminder.enabled) {
+            continue;
+          }
+          if (matchCron(reminder.cronExpression, now)) {
+            log.info(`reminder triggered: ${reminder.name} — ${reminder.message}`);
+            // Run wellbeing scan on affect-checkin reminders
+            if (reminder.type === "wellbeing-scan" || reminder.type === "affect-checkin") {
+              try {
+                const alerts = runWellbeingScan([]);
+                if (alerts.length > 0) {
+                  log.info(`wellbeing scan: ${alerts.length} alerts detected`);
+                }
+              } catch {
+                // wellbeing scan best-effort
+              }
+            }
+          }
+        }
+      }, 60_000);
+    } catch (err) {
+      log.warn(`reminder initialization failed: ${String(err)}`);
+    }
 
     // 7. Set up sibling greeting
     const display = formatAffect(BOOT_AFFECT);
