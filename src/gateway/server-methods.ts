@@ -91,6 +91,7 @@ const READ_METHODS = new Set([
   "node.list",
   "node.describe",
   "chat.history",
+  "browser.capabilities.get",
   "config.get",
   "talk.config",
   "anima.providers.get",

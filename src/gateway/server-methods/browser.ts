@@ -31,6 +31,30 @@ type BrowserProxyResult = {
   files?: BrowserProxyFile[];
 };
 
+type BrowserNodeSummary = {
+  nodeId: string;
+  displayName: string | null;
+  remoteIp: string | null;
+};
+
+export type BrowserCapabilitiesSnapshot = {
+  browserEnabled: boolean;
+  evaluateEnabled: boolean;
+  auth: {
+    configured: boolean;
+    mode: "token" | "password" | "trusted-proxy" | "none";
+  };
+  routing: {
+    mode: "auto" | "manual" | "off";
+    pinnedNode: string | null;
+    activeRoute: "disabled" | "local" | "node" | "error";
+    selectedNode: BrowserNodeSummary | null;
+    availableNodes: BrowserNodeSummary[];
+    error: string | null;
+  };
+  warnings: string[];
+};
+
 function isBrowserNode(node: NodeSession) {
   const caps = Array.isArray(node.caps) ? node.caps : [];
   const commands = Array.isArray(node.commands) ? node.commands : [];
@@ -120,7 +144,126 @@ function applyProxyPaths(result: unknown, mapping: Map<string, string>) {
   applyBrowserProxyPaths(result, mapping);
 }
 
+function toNodeSummary(node: NodeSession): BrowserNodeSummary {
+  return {
+    nodeId: node.nodeId,
+    displayName: node.displayName ?? null,
+    remoteIp: node.remoteIp ?? null,
+  };
+}
+
+function hasValue(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function resolveGatewayAuthMode(
+  cfg: ReturnType<typeof loadConfig>,
+): BrowserCapabilitiesSnapshot["auth"]["mode"] {
+  const configuredMode = cfg.gateway?.auth?.mode;
+  if (
+    configuredMode === "token" ||
+    configuredMode === "password" ||
+    configuredMode === "trusted-proxy"
+  ) {
+    return configuredMode;
+  }
+  if (hasValue(cfg.gateway?.auth?.token)) {
+    return "token";
+  }
+  if (hasValue(cfg.gateway?.auth?.password)) {
+    return "password";
+  }
+  if (hasValue(cfg.gateway?.auth?.trustedProxy?.userHeader)) {
+    return "trusted-proxy";
+  }
+  return "none";
+}
+
+export function buildBrowserCapabilitiesSnapshot(params: {
+  cfg: ReturnType<typeof loadConfig>;
+  nodes: NodeSession[];
+}): BrowserCapabilitiesSnapshot {
+  const browserEnabled = params.cfg.browser?.enabled !== false;
+  const evaluateEnabled = browserEnabled && params.cfg.browser?.evaluateEnabled !== false;
+  const mode = params.cfg.gateway?.nodes?.browser?.mode ?? "auto";
+  const pinnedNode = hasValue(params.cfg.gateway?.nodes?.browser?.node)
+    ? String(params.cfg.gateway?.nodes?.browser?.node).trim()
+    : null;
+  const availableNodes = params.nodes.filter((node) => isBrowserNode(node)).map(toNodeSummary);
+  const authMode = resolveGatewayAuthMode(params.cfg);
+  const authConfigured =
+    hasValue(params.cfg.gateway?.auth?.token) ||
+    hasValue(params.cfg.gateway?.auth?.password) ||
+    authMode === "trusted-proxy";
+
+  let selectedNode: NodeSession | null = null;
+  let routingError: string | null = null;
+  try {
+    selectedNode = resolveBrowserNodeTarget(params);
+  } catch (error) {
+    routingError = String(error);
+  }
+
+  const activeRoute: BrowserCapabilitiesSnapshot["routing"]["activeRoute"] =
+    !browserEnabled || mode === "off"
+      ? "disabled"
+      : routingError
+        ? "error"
+        : selectedNode
+          ? "node"
+          : "local";
+
+  const warnings: string[] = [];
+  if (browserEnabled && !authConfigured) {
+    warnings.push(
+      "Browser control is enabled without gateway auth. Configure gateway.auth.token or gateway.auth.password.",
+    );
+  }
+  if (mode === "manual" && !pinnedNode) {
+    warnings.push(
+      "Browser node routing is set to manual but no gateway.nodes.browser.node is pinned; routing will fall back to local browser control.",
+    );
+  }
+  if (availableNodes.length > 1 && mode === "auto" && !pinnedNode && !selectedNode) {
+    warnings.push(
+      "Multiple browser-capable nodes are connected; set gateway.nodes.browser.node to pin a target.",
+    );
+  }
+  if (routingError) {
+    warnings.push(routingError);
+  }
+
+  return {
+    browserEnabled,
+    evaluateEnabled,
+    auth: {
+      configured: authConfigured,
+      mode: authMode,
+    },
+    routing: {
+      mode,
+      pinnedNode,
+      activeRoute,
+      selectedNode: selectedNode ? toNodeSummary(selectedNode) : null,
+      availableNodes,
+      error: routingError,
+    },
+    warnings,
+  };
+}
+
 export const browserHandlers: GatewayRequestHandlers = {
+  "browser.capabilities.get": async ({ respond, context }) => {
+    try {
+      const snapshot = buildBrowserCapabilitiesSnapshot({
+        cfg: loadConfig(),
+        nodes: context.nodeRegistry.listConnected(),
+      });
+      respond(true, snapshot);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
   "browser.request": async ({ params, respond, context }) => {
     const typed = params as BrowserRequestParams;
     const methodRaw = typeof typed.method === "string" ? typed.method.trim().toUpperCase() : "";
