@@ -90,6 +90,19 @@ describe("desktop control session handlers", () => {
     resetDesktopControlSessionsForTests();
   });
 
+  it("requires write scope to create a desktop control session", async () => {
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "scope enforcement create",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(created.response.ok).toBe(false);
+    expect(created.response.error?.message).toContain("missing scope: operator.write");
+  });
+
   it("creates a pending local session by default", async () => {
     const { response } = await invokeHandler({
       method: "desktop.control.session.create",
@@ -152,6 +165,22 @@ describe("desktop control session handlers", () => {
 
     expect(requested.response.ok).toBe(false);
     expect(requested.response.error?.message).toContain("session is not approved");
+  });
+
+  it("requires read scope to list desktop control sessions", async () => {
+    await invokeHandler({
+      method: "desktop.control.session.create",
+      params: { reason: "scope enforcement list" },
+    });
+
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {},
+      scopes: ["operator.write"],
+    });
+
+    expect(listed.response.ok).toBe(false);
+    expect(listed.response.error?.message).toContain("missing scope: operator.read");
   });
 
   it("requires an approval note for elevated-risk sessions", async () => {
@@ -293,6 +322,63 @@ describe("desktop control session handlers", () => {
       nodeId: "desktop-1",
       command: "browser.proxy",
     });
+  });
+
+  it("requires write scope to issue desktop control requests", async () => {
+    const browserNode = createNode({
+      nodeId: "desktop-scope",
+      displayName: "Desktop Scope",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+
+    const invokeMock = vi.fn(async () => ({
+      ok: true,
+      payloadJSON: JSON.stringify({
+        result: {
+          ok: true,
+        },
+      }),
+    }));
+
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "scope enforcement request",
+        nodeId: "desktop-scope",
+      },
+      nodes: [browserNode],
+      invokeMock,
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const approved = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+    expect(approved.response.ok).toBe(true);
+
+    const requested = await invokeHandler({
+      method: "desktop.control.session.request",
+      params: {
+        id: createdPayload.id,
+        method: "GET",
+        path: "/status",
+      },
+      scopes: ["operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+
+    expect(requested.response.ok).toBe(false);
+    expect(requested.response.error?.message).toContain("missing scope: operator.write");
+    expect(invokeMock).toHaveBeenCalledTimes(0);
   });
 
   it("blocks non-whitelisted request methods for a session", async () => {

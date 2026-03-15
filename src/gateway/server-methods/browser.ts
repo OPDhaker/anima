@@ -867,6 +867,14 @@ export const browserHandlers: GatewayRequestHandlers = {
   },
   "desktop.control.session.create": async ({ params, respond, context, client }) => {
     pruneDesktopControlSessions({ context });
+    if (!hasOperatorScope(client, "operator.write")) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "missing scope: operator.write"),
+      );
+      return;
+    }
     const typed = params as DesktopControlCreateParams;
     const cfg = loadConfig();
     const connectedNodes = context.nodeRegistry.listConnected();
@@ -976,8 +984,16 @@ export const browserHandlers: GatewayRequestHandlers = {
     });
     respond(true, toDesktopControlSessionSnapshot(session, true));
   },
-  "desktop.control.session.list": async ({ params, respond, context }) => {
+  "desktop.control.session.list": async ({ params, respond, context, client }) => {
     pruneDesktopControlSessions({ context });
+    if (!hasOperatorScope(client, "operator.read")) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "missing scope: operator.read"),
+      );
+      return;
+    }
     const typed = params as DesktopControlListParams;
     const includeAudit = typed.includeAudit === true;
     const state = typeof typed.state === "string" ? typed.state : undefined;
@@ -991,8 +1007,16 @@ export const browserHandlers: GatewayRequestHandlers = {
       sessions,
     });
   },
-  "desktop.control.session.get": async ({ params, respond, context }) => {
+  "desktop.control.session.get": async ({ params, respond, context, client }) => {
     pruneDesktopControlSessions({ context });
+    if (!hasOperatorScope(client, "operator.read")) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "missing scope: operator.read"),
+      );
+      return;
+    }
     const typed = params as DesktopControlGetParams;
     const found = ensureDesktopSessionExists(typed.id);
     if (!found.ok) {
@@ -1103,6 +1127,14 @@ export const browserHandlers: GatewayRequestHandlers = {
   },
   "desktop.control.session.close": async ({ params, respond, client, context }) => {
     pruneDesktopControlSessions({ context });
+    if (!hasOperatorScope(client, "operator.write")) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "missing scope: operator.write"),
+      );
+      return;
+    }
     const typed = params as DesktopControlCloseParams;
     const found = ensureDesktopSessionExists(typed.id);
     if (!found.ok) {
@@ -1138,6 +1170,14 @@ export const browserHandlers: GatewayRequestHandlers = {
   },
   "desktop.control.session.request": async ({ params, respond, client, context }) => {
     pruneDesktopControlSessions({ context });
+    if (!hasOperatorScope(client, "operator.write")) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "missing scope: operator.write"),
+      );
+      return;
+    }
     const typed = params as DesktopControlRequestParams;
     const found = ensureDesktopSessionExists(typed.id);
     if (!found.ok) {
