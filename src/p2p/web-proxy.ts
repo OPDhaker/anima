@@ -15,7 +15,7 @@
 
 import { EventEmitter } from "node:events";
 import http from "node:http";
-import type { WebHostManager, SiteFile } from "./web-host.js";
+import type { WebHostManager } from "./web-host.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 
 const log = createSubsystemLogger("p2p-web-proxy");
