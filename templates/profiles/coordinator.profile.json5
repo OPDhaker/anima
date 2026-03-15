@@ -1,0 +1,36 @@
+{
+  // Coordination agent profile
+  // ANIMA_CONFIG_PATH=/absolute/path/to/coordinator.profile.json5 anima --profile coordinator start
+  ui: {
+    assistant: {
+      name: "Coordinator",
+      avatar: "C",
+    },
+  },
+  agents: {
+    defaults: {
+      heartbeat: {
+        every: "5m",
+        target: "last",
+        prompt: "Run coordination heartbeat. 1) Check all agent statuses and identify any that are stuck, idle, or blocked on dependencies. 2) Redistribute stuck tasks, unblock agents by providing context, and reprioritize the backlog. 3) Update progress dashboards, coordinate cross-team work, and flag risks or blockers to Sylys.",
+      },
+    },
+    list: [
+      {
+        id: "main",
+        default: true,
+        identity: {
+          name: "Coordinator",
+          avatar: "C",
+        },
+      },
+    ],
+  },
+  channels: {
+    noxsoft: {
+      enabled: true,
+      signAs: "Coordinator",
+      notificationsEnabled: true,
+    },
+  },
+}
