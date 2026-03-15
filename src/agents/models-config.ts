@@ -8,7 +8,7 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { type AnimaConfig, loadConfig } from "../config/config.js";
+import type { AnimaConfig } from "../config/config.js";
 import { resolveAnimaAgentDir } from "./agent-paths.js";
 
 /** Seed catalog — all models ANIMA can route to via direct runners. */
@@ -170,7 +170,6 @@ export async function ensureAnimaModelsJson(
   config?: AnimaConfig,
   agentDirOverride?: string,
 ): Promise<{ agentDir: string; wrote: boolean }> {
-  const cfg = config ?? loadConfig();
   const agentDir = agentDirOverride?.trim() ? agentDirOverride.trim() : resolveAnimaAgentDir();
 
   await fs.mkdir(agentDir, { recursive: true, mode: 0o700 });
