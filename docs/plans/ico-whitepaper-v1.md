@@ -421,7 +421,7 @@ Included coverage:
 
 Release artifact target:
 
-- `docs/governance/proposal-lifecycle-v1.md` with diagrams and concrete workflow examples.
+- `docs/governance/proposal-lifecycle-v1.md` with diagrams and concrete workflow examples (initial draft created).
 
 ### 7.4 Security and Incident Response Appendix
 
