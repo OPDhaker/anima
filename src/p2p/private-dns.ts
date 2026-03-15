@@ -273,7 +273,7 @@ export class PrivateDns extends EventEmitter {
     const now = Date.now();
 
     // Search DHT store
-    for (const [key, record] of this.dhtStore) {
+    for (const [, record] of this.dhtStore) {
       if (
         record.name === fqdn &&
         (!type || record.type === type) &&
@@ -284,7 +284,7 @@ export class PrivateDns extends EventEmitter {
     }
 
     // Search cache
-    for (const [key, cached] of this.cache) {
+    for (const [, cached] of this.cache) {
       if (
         cached.record.name === fqdn &&
         (!type || cached.record.type === type) &&

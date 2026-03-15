@@ -183,7 +183,7 @@ export class PinningManager extends EventEmitter {
     }
 
     // Cancel pending requests
-    for (const [id, pending] of this.pendingPinRequests) {
+    for (const [, pending] of this.pendingPinRequests) {
       clearTimeout(pending.timer);
       pending.resolve(false);
     }
@@ -309,7 +309,7 @@ export class PinningManager extends EventEmitter {
 
     switch (msg.type) {
       case "pin.request":
-        this.handlePinRequest(msg);
+        void this.handlePinRequest(msg);
         break;
       case "pin.ack":
         this.handlePinAck(msg);

@@ -17,7 +17,6 @@ import type { PeerMesh } from "./mesh.js";
 import type { PeerMessage } from "./protocol.js";
 import { resolveStateDir } from "../config/paths.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
-import { createMessage } from "./protocol.js";
 
 const log = createSubsystemLogger("p2p-content-router");
 
