@@ -1059,6 +1059,24 @@ export async function getSVRNStatus(): Promise<SVRNStatus> {
   return request<SVRNStatus>("/api/svrn/status");
 }
 
+export interface SVRNWalletDetails {
+  address: string;
+  balance: number;
+  totalEarned: number;
+  totalSpent: number;
+  createdAt: string | null;
+  recentTransactions: Array<{
+    type: "earn" | "spend";
+    amount: number;
+    description?: string;
+    timestamp: number;
+  }>;
+}
+
+export async function getSVRNWalletBalance(): Promise<SVRNWalletDetails> {
+  return request<SVRNWalletDetails>("/api/svrn/wallet/balance");
+}
+
 export async function getConfigSnapshot(): Promise<ConfigSnapshot> {
   return await callGatewayMethod<ConfigSnapshot>("config.get", {});
 }
@@ -1392,6 +1410,37 @@ export async function getOrgHierarchy(orgId: string): Promise<OrgHierarchyNode[]
     orgId,
   });
   return Array.isArray(result.hierarchy) ? result.hierarchy : [];
+}
+
+export async function joinOrgWithInvite(params: {
+  inviteCode: string;
+  passcode: string;
+  displayName: string;
+  kind: OrgMemberKind;
+  description: string;
+  specializations: string[];
+}): Promise<{ org: NoxOrganization; member: OrgMember }> {
+  return callGatewayMethod<{ org: NoxOrganization; member: OrgMember }>("org.join", params);
+}
+
+export async function validateOrgInvite(params: {
+  inviteCode: string;
+  passcode: string;
+}): Promise<{ org: NoxOrganization; role: OrgRoleType }> {
+  return callGatewayMethod<{ org: NoxOrganization; role: OrgRoleType }>(
+    "org.validateInvite",
+    params,
+  );
+}
+
+export async function createOrgInvite(params: {
+  orgId: string;
+  passcode: string;
+  role?: OrgRoleType;
+  maxUses?: number;
+  expiresInMs?: number;
+}): Promise<{ code: string; passcode: string }> {
+  return callGatewayMethod<{ code: string; passcode: string }>("org.createInvite", params);
 }
 
 // --- WebSocket ---

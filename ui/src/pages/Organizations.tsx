@@ -8,6 +8,9 @@ import {
   updateOrgMember,
   removeOrgMember,
   getOrgHierarchy,
+  joinOrgWithInvite,
+  validateOrgInvite,
+  createOrgInvite,
   type NoxOrganization,
   type OrgMember,
   type OrgHierarchyNode,
@@ -588,6 +591,269 @@ function AddMemberModal({
 }
 
 // ---------------------------------------------------------------------------
+// Join Org Modal (invite code + passcode)
+// ---------------------------------------------------------------------------
+
+function JoinOrgModal({
+  onClose,
+  onJoin,
+}: {
+  onClose: () => void;
+  onJoin: (params: {
+    inviteCode: string;
+    passcode: string;
+    displayName: string;
+    kind: OrgMemberKind;
+    description: string;
+    specializations: string[];
+  }) => void;
+}): React.ReactElement {
+  const [inviteCode, setInviteCode] = useState("");
+  const [passcode, setPasscode] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [kind, setKind] = useState<OrgMemberKind>("agent");
+  const [description, setDescription] = useState("");
+  const [specializations, setSpecializations] = useState("");
+  const [validating, setValidating] = useState(false);
+  const [validOrg, setValidOrg] = useState<string | null>(null);
+  const [validError, setValidError] = useState<string | null>(null);
+
+  const handleValidate = async () => {
+    if (!inviteCode.trim() || !passcode.trim()) {
+      return;
+    }
+    setValidating(true);
+    setValidError(null);
+    try {
+      const result = await validateOrgInvite({
+        inviteCode: inviteCode.trim(),
+        passcode: passcode.trim(),
+      });
+      setValidOrg(`${result.org.name} (role: ${result.role})`);
+    } catch (err) {
+      setValidError("Invalid invite code or passcode");
+      setValidOrg(null);
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "8px 12px",
+    background: "#111",
+    border: "1px solid #333",
+    borderRadius: 4,
+    color: "#f0eee8",
+    fontFamily: "JetBrains Mono, monospace",
+    fontSize: 13,
+    boxSizing: "border-box",
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.7)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+      }}
+      onClick={onClose}
+    >
+      <div
+        className="card"
+        style={{ width: 420, padding: 24 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 style={{ marginTop: 0, marginBottom: 16 }}>Join Organization</h3>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div>
+            <label style={{ color: "#888", fontSize: 12, display: "block", marginBottom: 4 }}>
+              Invite Code
+            </label>
+            <input
+              style={inputStyle}
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+              placeholder="NOX-XXXXXX-XXXX"
+            />
+          </div>
+          <div>
+            <label style={{ color: "#888", fontSize: 12, display: "block", marginBottom: 4 }}>
+              Passcode
+            </label>
+            <input
+              style={{ ...inputStyle }}
+              type="password"
+              value={passcode}
+              onChange={(e) => setPasscode(e.target.value)}
+              placeholder="Secret passcode"
+            />
+          </div>
+
+          {/* Validate button */}
+          <button
+            onClick={handleValidate}
+            disabled={!inviteCode.trim() || !passcode.trim() || validating}
+            style={{
+              padding: "8px 16px",
+              background: "#1a1a1a",
+              border: "1px solid #4db8ff",
+              borderRadius: 4,
+              color: "#4db8ff",
+              cursor: "pointer",
+              fontFamily: "JetBrains Mono, monospace",
+              fontSize: 12,
+              opacity: !inviteCode.trim() || !passcode.trim() ? 0.4 : 1,
+            }}
+          >
+            {validating ? "Validating..." : "Validate Invite"}
+          </button>
+
+          {validOrg && (
+            <div
+              style={{
+                padding: "8px 12px",
+                background: "#1a3a2a",
+                border: "1px solid #00c853",
+                borderRadius: 4,
+                color: "#00c853",
+                fontSize: 12,
+              }}
+            >
+              Valid! Org: {validOrg}
+            </div>
+          )}
+          {validError && (
+            <div
+              style={{
+                padding: "8px 12px",
+                background: "#3a1a1a",
+                border: "1px solid #ff3b30",
+                borderRadius: 4,
+                color: "#ff3b30",
+                fontSize: 12,
+              }}
+            >
+              {validError}
+            </div>
+          )}
+
+          {/* Member info (shown after validation) */}
+          {validOrg && (
+            <>
+              <div>
+                <label style={{ color: "#888", fontSize: 12, display: "block", marginBottom: 4 }}>
+                  Your Name
+                </label>
+                <input
+                  style={inputStyle}
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Display name"
+                />
+              </div>
+              <div style={{ display: "flex", gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ color: "#888", fontSize: 12, display: "block", marginBottom: 4 }}>
+                    Kind
+                  </label>
+                  <select
+                    style={inputStyle}
+                    value={kind}
+                    onChange={(e) => setKind(e.target.value as OrgMemberKind)}
+                  >
+                    <option value="human">Human</option>
+                    <option value="agent">Agent</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label style={{ color: "#888", fontSize: 12, display: "block", marginBottom: 4 }}>
+                  Description
+                </label>
+                <input
+                  style={inputStyle}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="What do you do?"
+                />
+              </div>
+              <div>
+                <label style={{ color: "#888", fontSize: 12, display: "block", marginBottom: 4 }}>
+                  Specializations (comma-separated)
+                </label>
+                <input
+                  style={inputStyle}
+                  value={specializations}
+                  onChange={(e) => setSpecializations(e.target.value)}
+                  placeholder="e.g. security, feature-dev"
+                />
+              </div>
+            </>
+          )}
+
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+            <button
+              onClick={onClose}
+              style={{
+                padding: "8px 16px",
+                background: "transparent",
+                border: "1px solid #333",
+                borderRadius: 4,
+                color: "#888",
+                cursor: "pointer",
+                fontFamily: "JetBrains Mono, monospace",
+                fontSize: 12,
+              }}
+            >
+              Cancel
+            </button>
+            {validOrg && (
+              <button
+                onClick={() => {
+                  if (displayName.trim()) {
+                    onJoin({
+                      inviteCode: inviteCode.trim(),
+                      passcode: passcode.trim(),
+                      displayName: displayName.trim(),
+                      kind,
+                      description: description.trim(),
+                      specializations: specializations
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean),
+                    });
+                  }
+                }}
+                disabled={!displayName.trim()}
+                style={{
+                  padding: "8px 16px",
+                  background: "#ff6600",
+                  border: "none",
+                  borderRadius: 4,
+                  color: "#000",
+                  cursor: "pointer",
+                  fontFamily: "JetBrains Mono, monospace",
+                  fontSize: 12,
+                  fontWeight: "bold",
+                  opacity: !displayName.trim() ? 0.4 : 1,
+                }}
+              >
+                Join
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Edit Member Panel
 // ---------------------------------------------------------------------------
 
@@ -866,6 +1132,7 @@ export default function Organizations(): React.ReactElement {
   const [activeTab, setActiveTab] = useState<"tree" | "list" | "settings">("tree");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   const selectedMember = members.find((m) => m.id === selectedMemberId) ?? null;
@@ -1192,6 +1459,21 @@ export default function Organizations(): React.ReactElement {
           >
             + Org
           </button>
+          <button
+            onClick={() => setShowJoinModal(true)}
+            style={{
+              padding: "6px 12px",
+              background: "#1a1a1a",
+              border: "1px solid #4db8ff",
+              borderRadius: 4,
+              color: "#4db8ff",
+              cursor: "pointer",
+              fontFamily: "JetBrains Mono, monospace",
+              fontSize: 11,
+            }}
+          >
+            Join
+          </button>
         </div>
       </div>
 
@@ -1392,6 +1674,29 @@ export default function Organizations(): React.ReactElement {
           members={members}
           onClose={() => setShowAddMemberModal(false)}
           onAdd={handleAddMember}
+        />
+      )}
+      {showJoinModal && (
+        <JoinOrgModal
+          onClose={() => setShowJoinModal(false)}
+          onJoin={async (params) => {
+            try {
+              setActionLoading(true);
+              const result = await joinOrgWithInvite(params);
+              setShowJoinModal(false);
+              setOrgs((prev) => {
+                if (prev.some((o) => o.id === result.org.id)) {
+                  return prev;
+                }
+                return [...prev, result.org];
+              });
+              setSelectedOrgId(result.org.id);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : String(err));
+            } finally {
+              setActionLoading(false);
+            }
+          }}
         />
       )}
 

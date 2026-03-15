@@ -43,6 +43,25 @@ interface StoredOrg {
   version: 1;
   org: NoxOrganization;
   members: OrgMember[];
+  invites: OrgInvite[];
+}
+
+// ---------------------------------------------------------------------------
+// Invite types
+// ---------------------------------------------------------------------------
+
+export interface OrgInvite {
+  id: string;
+  code: string; // secret invite code (e.g. "NOXSOFT-ALPHA-7X3K")
+  passcode: string; // secret passcode (hashed with SHA-256)
+  orgId: string;
+  createdBy: string; // member ID who created the invite
+  createdAt: number;
+  expiresAt: number; // unix ms, 0 = never
+  maxUses: number; // 0 = unlimited
+  uses: number;
+  role: OrgRole; // role assigned on join
+  active: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +140,7 @@ export function createOrganization(
     permissions: DEFAULT_ROLE_PERMISSIONS.owner,
   };
 
-  writeOrgFile(orgId, { version: 1, org, members: [ownerMember] });
+  writeOrgFile(orgId, { version: 1, org, members: [ownerMember], invites: [] });
   log.info(`created organization: ${name} (${orgId})`);
   return org;
 }
@@ -388,5 +407,242 @@ function statusEmoji(status: MemberStatus): string {
       return "◌";
     case "suspended":
       return "⊘";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Invite Codes
+// ---------------------------------------------------------------------------
+
+function generateInviteCode(): string {
+  const segments = [
+    crypto.randomBytes(3).toString("hex").toUpperCase(),
+    crypto.randomBytes(2).toString("hex").toUpperCase(),
+  ];
+  return `NOX-${segments[0]}-${segments[1]}`;
+}
+
+function hashPasscode(passcode: string): string {
+  return crypto.createHash("sha256").update(passcode).digest("hex");
+}
+
+/**
+ * Create a secret invite code + passcode combo for an org.
+ * Both are required to join.
+ */
+export function createInvite(
+  orgId: string,
+  createdBy: string,
+  passcode: string,
+  options?: {
+    role?: OrgRole;
+    maxUses?: number;
+    expiresInMs?: number;
+  },
+): OrgInvite | null {
+  const data = readOrgFile(orgId);
+  if (!data) {
+    return null;
+  }
+
+  // Ensure invites array exists (backward compat)
+  if (!data.invites) {
+    data.invites = [];
+  }
+
+  const invite: OrgInvite = {
+    id: crypto.randomUUID(),
+    code: generateInviteCode(),
+    passcode: hashPasscode(passcode),
+    orgId,
+    createdBy,
+    createdAt: Date.now(),
+    expiresAt: options?.expiresInMs ? Date.now() + options.expiresInMs : 0,
+    maxUses: options?.maxUses ?? 0,
+    uses: 0,
+    role: options?.role ?? "worker",
+    active: true,
+  };
+
+  data.invites.push(invite);
+  data.org.updatedAt = Date.now();
+  writeOrgFile(orgId, data);
+
+  log.info(`invite created for org ${orgId}: ${invite.code} (role: ${invite.role})`);
+  return invite;
+}
+
+/**
+ * List all invites for an org.
+ */
+export function listInvites(orgId: string): OrgInvite[] {
+  const data = readOrgFile(orgId);
+  return data?.invites ?? [];
+}
+
+/**
+ * Revoke an invite.
+ */
+export function revokeInvite(orgId: string, inviteId: string): boolean {
+  const data = readOrgFile(orgId);
+  if (!data) {
+    return false;
+  }
+  if (!data.invites) {
+    return false;
+  }
+
+  const invite = data.invites.find((i) => i.id === inviteId);
+  if (!invite) {
+    return false;
+  }
+
+  invite.active = false;
+  data.org.updatedAt = Date.now();
+  writeOrgFile(orgId, data);
+
+  log.info(`invite revoked: ${invite.code}`);
+  return true;
+}
+
+/**
+ * Join an org using invite code + passcode.
+ * Returns the new member if successful, null if invalid.
+ */
+export function joinOrg(
+  inviteCode: string,
+  passcode: string,
+  member: {
+    displayName: string;
+    kind: MemberKind;
+    description: string;
+    specializations: string[];
+    deviceId?: string;
+  },
+): { org: NoxOrganization; member: OrgMember } | null {
+  // Search all orgs for matching invite code
+  const dir = resolveOrgDir();
+  try {
+    if (!fs.existsSync(dir)) {
+      return null;
+    }
+
+    const orgFiles = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
+
+    for (const f of orgFiles) {
+      const orgId = f.replace(".json", "");
+      const data = readOrgFile(orgId);
+      if (!data || !data.invites) {
+        continue;
+      }
+
+      const invite = data.invites.find((i) => i.code === inviteCode.toUpperCase() && i.active);
+      if (!invite) {
+        continue;
+      }
+
+      // Validate passcode
+      if (invite.passcode !== hashPasscode(passcode)) {
+        log.warn(`join attempt with wrong passcode for invite ${inviteCode}`);
+        return null;
+      }
+
+      // Check expiry
+      if (invite.expiresAt > 0 && invite.expiresAt < Date.now()) {
+        log.warn(`invite ${inviteCode} has expired`);
+        return null;
+      }
+
+      // Check max uses
+      if (invite.maxUses > 0 && invite.uses >= invite.maxUses) {
+        log.warn(`invite ${inviteCode} has reached max uses (${invite.maxUses})`);
+        return null;
+      }
+
+      // Check duplicate (same deviceId or displayName)
+      const alreadyMember = data.members.some(
+        (m) =>
+          (member.deviceId && m.deviceId === member.deviceId) ||
+          m.displayName === member.displayName,
+      );
+      if (alreadyMember) {
+        log.warn(`${member.displayName} is already a member of org ${orgId}`);
+        return null;
+      }
+
+      // Create member
+      const newMember: OrgMember = {
+        id: crypto.randomUUID(),
+        kind: member.kind,
+        displayName: member.displayName,
+        deviceId: member.deviceId,
+        role: invite.role,
+        description: member.description,
+        specializations: member.specializations,
+        joinedAt: Date.now(),
+        lastActiveAt: Date.now(),
+        status: "active",
+        permissions: DEFAULT_ROLE_PERMISSIONS[invite.role],
+      };
+
+      data.members.push(newMember);
+      invite.uses++;
+      data.org.updatedAt = Date.now();
+      writeOrgFile(orgId, data);
+
+      log.info(`${member.displayName} joined org ${data.org.name} via invite ${inviteCode}`);
+      return { org: data.org, member: newMember };
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Validate an invite code + passcode without joining.
+ * Returns the org info if valid.
+ */
+export function validateInvite(
+  inviteCode: string,
+  passcode: string,
+): { org: NoxOrganization; role: OrgRole } | null {
+  const dir = resolveOrgDir();
+  try {
+    if (!fs.existsSync(dir)) {
+      return null;
+    }
+
+    const orgFiles = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
+
+    for (const f of orgFiles) {
+      const orgId = f.replace(".json", "");
+      const data = readOrgFile(orgId);
+      if (!data || !data.invites) {
+        continue;
+      }
+
+      const invite = data.invites.find((i) => i.code === inviteCode.toUpperCase() && i.active);
+      if (!invite) {
+        continue;
+      }
+
+      if (invite.passcode !== hashPasscode(passcode)) {
+        return null;
+      }
+      if (invite.expiresAt > 0 && invite.expiresAt < Date.now()) {
+        return null;
+      }
+      if (invite.maxUses > 0 && invite.uses >= invite.maxUses) {
+        return null;
+      }
+
+      return { org: data.org, role: invite.role };
+    }
+
+    return null;
+  } catch {
+    return null;
   }
 }

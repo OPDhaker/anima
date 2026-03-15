@@ -13,6 +13,7 @@
 import type { ChannelBridge } from "../channels/bridge.js";
 import { AffectCoordinator } from "../affect/coordination.js";
 import { formatAffect, type AffectState } from "../affect/display.js";
+import { AtmaFailoverManager } from "../infra/atma-failover.js";
 import { JackInManager } from "../jack-in/connector.js";
 import { createDefaultConnectors } from "../jack-in/connectors.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
@@ -47,6 +48,7 @@ export interface P2PStartupResult {
   jackInManager: JackInManager | null;
   greetingManager: GreetingManager | null;
   affectCoordinator: AffectCoordinator | null;
+  atmaFailover: AtmaFailoverManager | null;
 }
 
 export async function startP2PSubsystem(options: {
@@ -64,6 +66,7 @@ export async function startP2PSubsystem(options: {
     jackInManager: null,
     greetingManager: null,
     affectCoordinator: null,
+    atmaFailover: null,
   };
 
   // Check if P2P is enabled
@@ -138,12 +141,21 @@ export async function startP2PSubsystem(options: {
     const greetingManager = new GreetingManager(mesh, greeting);
     log.info("sibling greeting protocol active");
 
+    // 8. Start atma failover (no agent dies)
+    const atmaFailover = new AtmaFailoverManager(
+      peerIdentity.deviceId,
+      options.agentName ?? "Anima Agent",
+    );
+    atmaFailover.startMonitoring();
+    log.info("atma failover monitoring active — no agent dies");
+
     return {
       mesh,
       peerChannel,
       jackInManager,
       greetingManager,
       affectCoordinator,
+      atmaFailover,
     };
   } catch (err) {
     log.warn(`P2P subsystem failed to start: ${String(err)}`);

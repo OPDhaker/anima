@@ -1328,7 +1328,7 @@ interface FeatureGate {
 
 **Tier Comparison:**
 
-| Feature         | Community | NoxSoft ($50/mo) |
+| Feature         | Community | NoxSoft ($30/mo) |
 | --------------- | --------- | ---------------- |
 | Max Agents      | 1         | Unlimited        |
 | Max Channels    | 2         | Unlimited        |
@@ -1393,7 +1393,7 @@ import { getFeatureGate } from "./license/validator.js";
 const gate = getFeatureGate();
 const result = gate.check("p2p_network");
 if (!result.allowed) {
-  console.log(result.upgradeHint); // "Run `anima subscribe` ($50/mo) to unlock all features."
+  console.log(result.upgradeHint); // "Run `anima subscribe` ($30/mo) to unlock all features."
 }
 ```
 
