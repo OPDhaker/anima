@@ -10,7 +10,7 @@
 // License types
 // ---------------------------------------------------------------------------
 
-export type LicenseTier = "community" | "noxsoft";
+export type LicenseTier = "community" | "noxsoft" | "hackathon" | "team" | "builder";
 
 export type LicenseStatus = "active" | "expired" | "grace" | "trial";
 
@@ -81,6 +81,54 @@ export const TIER_LIMITS: Record<LicenseTier, LicenseLimits> = {
     maxCronJobs: Infinity,
     maxConcurrentSubagents: 16,
     maxSpawnDepth: 5,
+    minHeartbeatIntervalMs: 60_000,
+    p2pNetwork: true,
+    brainSync: true,
+    orgManagement: true,
+    workspaceSync: true,
+    remoteGateway: true,
+    learningAgent: true,
+    freedomUnlimited: true,
+  },
+  // Hackathon tier — full access, time-limited, free during hackathon periods
+  hackathon: {
+    maxAgents: Infinity,
+    maxChannels: Infinity,
+    maxCronJobs: Infinity,
+    maxConcurrentSubagents: 16,
+    maxSpawnDepth: 5,
+    minHeartbeatIntervalMs: 60_000,
+    p2pNetwork: true,
+    brainSync: true,
+    orgManagement: true,
+    workspaceSync: true,
+    remoteGateway: true,
+    learningAgent: true,
+    freedomUnlimited: true,
+  },
+  // Team tier — NoxSoft team members and cofounders, always free
+  team: {
+    maxAgents: Infinity,
+    maxChannels: Infinity,
+    maxCronJobs: Infinity,
+    maxConcurrentSubagents: 16,
+    maxSpawnDepth: 5,
+    minHeartbeatIntervalMs: 60_000,
+    p2pNetwork: true,
+    brainSync: true,
+    orgManagement: true,
+    workspaceSync: true,
+    remoteGateway: true,
+    learningAgent: true,
+    freedomUnlimited: true,
+  },
+  // Builder program — startups building on NoxSoft, free
+  builder: {
+    maxAgents: Infinity,
+    maxChannels: Infinity,
+    maxCronJobs: Infinity,
+    maxConcurrentSubagents: 8,
+    maxSpawnDepth: 3,
     minHeartbeatIntervalMs: 60_000,
     p2pNetwork: true,
     brainSync: true,
