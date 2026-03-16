@@ -591,6 +591,79 @@ describe("desktop control session handlers", () => {
     expect(listed.response.error?.message).toContain("missing scope: operator.read");
   });
 
+  it("rejects invalid state filters when listing sessions", async () => {
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        state: "pending",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(false);
+    expect(listed.response.error?.message).toContain("invalid state filter");
+    expect(listed.response.error?.details).toEqual(
+      expect.objectContaining({
+        allowedStates: ["pending_approval", "active", "denied", "closed", "expired"],
+      }),
+    );
+  });
+
+  it("filters listed sessions by a valid state", async () => {
+    const first = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: { reason: "state filter pending session" },
+      scopes: ["operator.write", "operator.read"],
+    });
+    const firstPayload = first.response.payload as { id: string };
+
+    const second = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: { reason: "state filter denied session" },
+      scopes: ["operator.write", "operator.read"],
+    });
+    const secondPayload = second.response.payload as { id: string };
+
+    const denied = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: secondPayload.id,
+        decision: "deny",
+        note: "Denied for state-filter regression coverage.",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+    });
+    expect(denied.response.ok).toBe(true);
+
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        state: "pending_approval",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(true);
+    const payload = listed.response.payload as {
+      sessions: Array<{ id: string; state: string }>;
+    };
+    expect(payload.sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: firstPayload.id,
+          state: "pending_approval",
+        }),
+      ]),
+    );
+    expect(payload.sessions).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: secondPayload.id,
+        }),
+      ]),
+    );
+  });
+
   it("requires an approval note for elevated-risk sessions", async () => {
     const browserNode = createNode({
       nodeId: "desktop-risk",

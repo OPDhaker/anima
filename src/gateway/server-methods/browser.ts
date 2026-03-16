@@ -217,6 +217,13 @@ const DESKTOP_CONTROL_MIN_MAX_REQUESTS = 1;
 const DESKTOP_CONTROL_MAX_MAX_REQUESTS = 500;
 const DESKTOP_CONTROL_MAX_NOTE_LEN = 500;
 const DESKTOP_CONTROL_MIN_DECISION_NOTE_LEN = 8;
+const DESKTOP_CONTROL_SESSION_STATES: DesktopControlSessionState[] = [
+  "pending_approval",
+  "active",
+  "denied",
+  "closed",
+  "expired",
+];
 
 const desktopControlSessions = new Map<string, DesktopControlSessionRecord>();
 
@@ -399,6 +406,13 @@ function normalizeDesktopSessionNote(input: unknown): string | null {
 
 function hasDecisionRationale(note: string | null): boolean {
   return typeof note === "string" && note.length >= DESKTOP_CONTROL_MIN_DECISION_NOTE_LEN;
+}
+
+function isDesktopControlSessionState(value: unknown): value is DesktopControlSessionState {
+  return (
+    typeof value === "string" &&
+    DESKTOP_CONTROL_SESSION_STATES.includes(value as DesktopControlSessionState)
+  );
 }
 
 function normalizeDesktopSessionAllowMethods(input: unknown): DesktopControlSessionMethod[] {
@@ -1019,7 +1033,20 @@ export const browserHandlers: GatewayRequestHandlers = {
     }
     const typed = params as DesktopControlListParams;
     const includeAudit = typed.includeAudit === true;
-    const state = typeof typed.state === "string" ? typed.state : undefined;
+    const stateRaw = typeof typed.state === "string" ? typed.state.trim() : "";
+    if (stateRaw && !isDesktopControlSessionState(stateRaw)) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, `invalid state filter: ${stateRaw}`, {
+          details: {
+            allowedStates: DESKTOP_CONTROL_SESSION_STATES,
+          },
+        }),
+      );
+      return;
+    }
+    const state = stateRaw || undefined;
     const sessions = Array.from(desktopControlSessions.values())
       .filter((entry) => (state ? entry.state === state : true))
       .toSorted((a, b) => b.createdAtMs - a.createdAtMs)
