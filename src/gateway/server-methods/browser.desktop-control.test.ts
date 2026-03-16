@@ -282,7 +282,20 @@ describe("desktop control session handlers", () => {
       nodes: [browserNode],
     });
     expect(missingNote.response.ok).toBe(false);
-    expect(missingNote.response.error?.message).toContain("note is required");
+    expect(missingNote.response.error?.message).toContain("at least");
+
+    const shortNote = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+        note: "ok",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [browserNode],
+    });
+    expect(shortNote.response.ok).toBe(false);
+    expect(shortNote.response.error?.message).toContain("at least");
 
     const approved = await invokeHandler({
       method: "desktop.control.session.approve",
@@ -301,6 +314,63 @@ describe("desktop control session handlers", () => {
     };
     expect(approvedPayload.state).toBe("active");
     expect(approvedPayload.approval.note).toContain("Write access is needed");
+  });
+
+  it("requires a rationale note when denying a session", async () => {
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "deny rationale guardrail",
+      },
+      nodes: [],
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const missingNote = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "deny",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [],
+    });
+    expect(missingNote.response.ok).toBe(false);
+    expect(missingNote.response.error?.message).toContain("at least");
+
+    const shortNote = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "deny",
+        note: "no",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [],
+    });
+    expect(shortNote.response.ok).toBe(false);
+    expect(shortNote.response.error?.message).toContain("at least");
+
+    const denied = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "deny",
+        note: "Denied after checking operator policy requirements.",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [],
+    });
+    expect(denied.response.ok).toBe(true);
+    expect(denied.response.payload).toEqual(
+      expect.objectContaining({
+        state: "denied",
+        approval: expect.objectContaining({
+          decision: "deny",
+          note: "Denied after checking operator policy requirements.",
+        }),
+      }),
+    );
   });
 
   it("routes approved requests through the pinned browser node", async () => {

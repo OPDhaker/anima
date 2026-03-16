@@ -215,6 +215,8 @@ const DESKTOP_CONTROL_DEFAULT_ALLOWED_METHODS: DesktopControlSessionMethod[] = [
 const DESKTOP_CONTROL_DEFAULT_MAX_REQUESTS = 40;
 const DESKTOP_CONTROL_MIN_MAX_REQUESTS = 1;
 const DESKTOP_CONTROL_MAX_MAX_REQUESTS = 500;
+const DESKTOP_CONTROL_MAX_NOTE_LEN = 500;
+const DESKTOP_CONTROL_MIN_DECISION_NOTE_LEN = 8;
 
 const desktopControlSessions = new Map<string, DesktopControlSessionRecord>();
 
@@ -382,6 +384,21 @@ function normalizeDesktopSessionReason(input: unknown): string {
     return "Desktop control session";
   }
   return trimmed.slice(0, DESKTOP_CONTROL_MAX_REASON_LEN);
+}
+
+function normalizeDesktopSessionNote(input: unknown): string | null {
+  if (typeof input !== "string") {
+    return null;
+  }
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.slice(0, DESKTOP_CONTROL_MAX_NOTE_LEN);
+}
+
+function hasDecisionRationale(note: string | null): boolean {
+  return typeof note === "string" && note.length >= DESKTOP_CONTROL_MIN_DECISION_NOTE_LEN;
 }
 
 function normalizeDesktopSessionAllowMethods(input: unknown): DesktopControlSessionMethod[] {
@@ -1107,18 +1124,39 @@ export const browserHandlers: GatewayRequestHandlers = {
         return;
       }
     }
-    const note = typeof typed.note === "string" && typed.note.trim() ? typed.note.trim() : null;
-    if (decisionRaw === "allow" && session.risk.level === "elevated" && !note) {
+    const note = normalizeDesktopSessionNote(typed.note);
+    if (
+      decisionRaw === "allow" &&
+      session.risk.level === "elevated" &&
+      !hasDecisionRationale(note)
+    ) {
       respond(
         false,
         undefined,
         errorShape(
           ErrorCodes.INVALID_REQUEST,
-          "note is required when approving elevated-risk desktop control sessions",
+          `note must be at least ${DESKTOP_CONTROL_MIN_DECISION_NOTE_LEN} characters when approving elevated-risk desktop control sessions`,
           {
             details: {
               riskLevel: session.risk.level,
               riskReasons: session.risk.reasons,
+              minNoteLength: DESKTOP_CONTROL_MIN_DECISION_NOTE_LEN,
+            },
+          },
+        ),
+      );
+      return;
+    }
+    if (decisionRaw === "deny" && !hasDecisionRationale(note)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `note must be at least ${DESKTOP_CONTROL_MIN_DECISION_NOTE_LEN} characters when denying desktop control sessions`,
+          {
+            details: {
+              minNoteLength: DESKTOP_CONTROL_MIN_DECISION_NOTE_LEN,
             },
           },
         ),
@@ -1177,7 +1215,7 @@ export const browserHandlers: GatewayRequestHandlers = {
     const now = Date.now();
     session.state = "closed";
     session.closedAtMs = now;
-    const note = typeof typed.note === "string" && typed.note.trim() ? typed.note.trim() : null;
+    const note = normalizeDesktopSessionNote(typed.note);
     appendDesktopControlAudit(session, {
       type: "session.closed",
       actor: resolveClientActor(client),
