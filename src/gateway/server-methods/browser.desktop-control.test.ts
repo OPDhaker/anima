@@ -663,6 +663,20 @@ describe("desktop control session handlers", () => {
     );
   });
 
+  it("rejects nodeId filters when route=local", async () => {
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        route: "local",
+        nodeId: "desktop-route",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(false);
+    expect(listed.response.error?.message).toContain("nodeId filter requires route=node");
+  });
+
   it("filters listed sessions by a valid state", async () => {
     const first = await invokeHandler({
       method: "desktop.control.session.create",
@@ -845,6 +859,91 @@ describe("desktop control session handlers", () => {
           route: expect.objectContaining({
             kind: "node",
           }),
+        }),
+      ]),
+    );
+    expect(payload.sessions).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: localPayload.id,
+        }),
+      ]),
+    );
+  });
+
+  it("filters listed sessions by nodeId", async () => {
+    const nodeA = createNode({
+      nodeId: "desktop-route-a",
+      displayName: "Desktop Route A",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+    const nodeB = createNode({
+      nodeId: "desktop-route-b",
+      displayName: "Desktop Route B",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+
+    const local = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: { reason: "nodeId filter local session" },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [],
+    });
+    const localPayload = local.response.payload as { id: string };
+
+    const nodeSessionA = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "nodeId filter route A session",
+        nodeId: "desktop-route-a",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [nodeA, nodeB],
+    });
+    const nodeSessionAPayload = nodeSessionA.response.payload as { id: string };
+
+    const nodeSessionB = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "nodeId filter route B session",
+        nodeId: "desktop-route-b",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [nodeA, nodeB],
+    });
+    const nodeSessionBPayload = nodeSessionB.response.payload as { id: string };
+
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        nodeId: "desktop-route-a",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(true);
+    const payload = listed.response.payload as {
+      sessions: Array<{ id: string; route: { kind: string; node: { nodeId: string } | null } }>;
+    };
+    expect(payload.sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: nodeSessionAPayload.id,
+          route: expect.objectContaining({
+            kind: "node",
+            node: expect.objectContaining({
+              nodeId: "desktop-route-a",
+            }),
+          }),
+        }),
+      ]),
+    );
+    expect(payload.sessions).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: nodeSessionBPayload.id,
         }),
       ]),
     );

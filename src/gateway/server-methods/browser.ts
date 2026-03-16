@@ -200,6 +200,7 @@ type DesktopControlListParams = {
   decision?: DesktopControlApprovalDecision;
   route?: DesktopControlSessionRouteKind;
   riskLevel?: DesktopControlSessionRiskLevel;
+  nodeId?: string;
 };
 
 type DesktopControlCloseParams = {
@@ -1124,10 +1125,23 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
+    const nodeIdRaw = typeof typed.nodeId === "string" ? typed.nodeId.trim() : "";
+    if (routeRaw === "local" && nodeIdRaw) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          "nodeId filter requires route=node (or omit route to match node-routed sessions)",
+        ),
+      );
+      return;
+    }
     const state = stateRaw || undefined;
     const decision = decisionRaw || undefined;
     const route = routeRaw || undefined;
     const riskLevel = riskLevelRaw || undefined;
+    const nodeId = nodeIdRaw || undefined;
     const sessions = Array.from(desktopControlSessions.values())
       .filter((entry) => {
         if (state && entry.state !== state) {
@@ -1140,6 +1154,9 @@ export const browserHandlers: GatewayRequestHandlers = {
           return false;
         }
         if (riskLevel && entry.risk.level !== riskLevel) {
+          return false;
+        }
+        if (nodeId && (entry.route.kind !== "node" || entry.route.node.nodeId !== nodeId)) {
           return false;
         }
         return true;
