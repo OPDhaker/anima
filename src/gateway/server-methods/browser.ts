@@ -1134,6 +1134,11 @@ export const browserHandlers: GatewayRequestHandlers = {
             {
               details: {
                 nodeId: session.route.node.nodeId,
+                state: session.state,
+                decision: session.approval.decision,
+                expiresAtMs: session.expiresAtMs,
+                requestCount: session.requestCount,
+                maxRequests: session.controls.maxRequests,
               },
             },
           ),
@@ -1485,6 +1490,16 @@ export const browserHandlers: GatewayRequestHandlers = {
         errorShape(
           ErrorCodes.UNAVAILABLE,
           `pinned browser node is not connected: ${session.route.node.nodeId}`,
+          {
+            details: {
+              nodeId: session.route.node.nodeId,
+              state: session.state,
+              decision: session.approval.decision,
+              expiresAtMs: session.expiresAtMs,
+              requestCount: session.requestCount,
+              maxRequests: session.controls.maxRequests,
+            },
+          },
         ),
       );
       return;

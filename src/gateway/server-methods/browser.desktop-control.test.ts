@@ -357,6 +357,16 @@ describe("desktop control session handlers", () => {
     expect(disconnectedApproval.response.error?.message).toContain(
       "pinned browser node is not connected",
     );
+    expect(disconnectedApproval.response.error?.details).toEqual(
+      expect.objectContaining({
+        nodeId: "desktop-approval-route",
+        state: "pending_approval",
+        decision: "pending",
+        expiresAtMs: expect.any(Number),
+        requestCount: 0,
+        maxRequests: expect.any(Number),
+      }),
+    );
 
     const pendingAfterFailure = await invokeHandler({
       method: "desktop.control.session.get",
@@ -1528,6 +1538,16 @@ describe("desktop control session handlers", () => {
     expect(requestAfterDisconnect.response.ok).toBe(false);
     expect(requestAfterDisconnect.response.error?.message).toContain(
       "pinned browser node is not connected",
+    );
+    expect(requestAfterDisconnect.response.error?.details).toEqual(
+      expect.objectContaining({
+        nodeId: "desktop-4",
+        state: "active",
+        decision: "allow",
+        expiresAtMs: expect.any(Number),
+        requestCount: 0,
+        maxRequests: expect.any(Number),
+      }),
     );
     expect(requestAfterDisconnect.broadcast).toHaveBeenCalledWith(
       "desktop.control.session.updated",
