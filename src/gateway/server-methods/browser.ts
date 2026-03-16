@@ -105,9 +105,11 @@ type DesktopControlSessionRoute =
       node: BrowserNodeSummary;
     };
 
+type DesktopControlApprovalDecision = "pending" | "allow" | "deny";
+
 type DesktopControlSessionApproval = {
   required: true;
-  decision: "pending" | "allow" | "deny";
+  decision: DesktopControlApprovalDecision;
   requestedAtMs: number;
   requestedBy: string | null;
   decidedAtMs: number | null;
@@ -194,6 +196,7 @@ type DesktopControlGetParams = {
 type DesktopControlListParams = {
   includeAudit?: boolean;
   state?: DesktopControlSessionState;
+  decision?: DesktopControlApprovalDecision;
 };
 
 type DesktopControlCloseParams = {
@@ -223,6 +226,11 @@ const DESKTOP_CONTROL_SESSION_STATES: DesktopControlSessionState[] = [
   "denied",
   "closed",
   "expired",
+];
+const DESKTOP_CONTROL_SESSION_DECISIONS: DesktopControlApprovalDecision[] = [
+  "pending",
+  "allow",
+  "deny",
 ];
 
 const desktopControlSessions = new Map<string, DesktopControlSessionRecord>();
@@ -412,6 +420,13 @@ function isDesktopControlSessionState(value: unknown): value is DesktopControlSe
   return (
     typeof value === "string" &&
     DESKTOP_CONTROL_SESSION_STATES.includes(value as DesktopControlSessionState)
+  );
+}
+
+function isDesktopControlApprovalDecision(value: unknown): value is DesktopControlApprovalDecision {
+  return (
+    typeof value === "string" &&
+    DESKTOP_CONTROL_SESSION_DECISIONS.includes(value as DesktopControlApprovalDecision)
   );
 }
 
@@ -1046,9 +1061,32 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
+    const decisionRaw =
+      typeof typed.decision === "string" ? typed.decision.trim().toLowerCase() : "";
+    if (decisionRaw && !isDesktopControlApprovalDecision(decisionRaw)) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, `invalid decision filter: ${decisionRaw}`, {
+          details: {
+            allowedDecisions: DESKTOP_CONTROL_SESSION_DECISIONS,
+          },
+        }),
+      );
+      return;
+    }
     const state = stateRaw || undefined;
+    const decision = decisionRaw || undefined;
     const sessions = Array.from(desktopControlSessions.values())
-      .filter((entry) => (state ? entry.state === state : true))
+      .filter((entry) => {
+        if (state && entry.state !== state) {
+          return false;
+        }
+        if (decision && entry.approval.decision !== decision) {
+          return false;
+        }
+        return true;
+      })
       .toSorted((a, b) => b.createdAtMs - a.createdAtMs)
       .map((entry) => toDesktopControlSessionSnapshot(entry, includeAudit));
     respond(true, {

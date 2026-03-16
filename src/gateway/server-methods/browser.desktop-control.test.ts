@@ -609,6 +609,24 @@ describe("desktop control session handlers", () => {
     );
   });
 
+  it("rejects invalid decision filters when listing sessions", async () => {
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        decision: "approved",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(false);
+    expect(listed.response.error?.message).toContain("invalid decision filter");
+    expect(listed.response.error?.details).toEqual(
+      expect.objectContaining({
+        allowedDecisions: ["pending", "allow", "deny"],
+      }),
+    );
+  });
+
   it("filters listed sessions by a valid state", async () => {
     const first = await invokeHandler({
       method: "desktop.control.session.create",
@@ -659,6 +677,87 @@ describe("desktop control session handlers", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: secondPayload.id,
+        }),
+      ]),
+    );
+  });
+
+  it("filters listed sessions by a valid approval decision", async () => {
+    const pending = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: { reason: "decision filter pending session" },
+      scopes: ["operator.write", "operator.read"],
+    });
+    const pendingPayload = pending.response.payload as { id: string };
+
+    const allowed = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: { reason: "decision filter allow session" },
+      scopes: ["operator.write", "operator.read"],
+    });
+    const allowedPayload = allowed.response.payload as { id: string };
+
+    const approved = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: allowedPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+    });
+    expect(approved.response.ok).toBe(true);
+
+    const denied = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: { reason: "decision filter deny session" },
+      scopes: ["operator.write", "operator.read"],
+    });
+    const deniedPayload = denied.response.payload as { id: string };
+
+    const rejected = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: deniedPayload.id,
+        decision: "deny",
+        note: "Denied for decision-filter regression coverage.",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+    });
+    expect(rejected.response.ok).toBe(true);
+
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        decision: "deny",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(true);
+    const payload = listed.response.payload as {
+      sessions: Array<{ id: string; approval: { decision: string } }>;
+    };
+    expect(payload.sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: deniedPayload.id,
+          approval: expect.objectContaining({
+            decision: "deny",
+          }),
+        }),
+      ]),
+    );
+    expect(payload.sessions).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: pendingPayload.id,
+        }),
+      ]),
+    );
+    expect(payload.sessions).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: allowedPayload.id,
         }),
       ]),
     );
