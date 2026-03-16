@@ -1646,6 +1646,31 @@ describe("desktop control session handlers", () => {
     expect(approvedPayload.approval.note).toContain("Write access is needed");
   });
 
+  it("rejects non-string note payloads when approving sessions", async () => {
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "approve note type guardrail",
+      },
+      nodes: [],
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const approved = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+        note: { text: "not-a-string" },
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [],
+    });
+
+    expect(approved.response.ok).toBe(false);
+    expect(approved.response.error?.message).toContain("invalid note");
+  });
+
   it("requires a rationale note when denying a session", async () => {
     const created = await invokeHandler({
       method: "desktop.control.session.create",
@@ -1772,6 +1797,30 @@ describe("desktop control session handlers", () => {
       }),
       expect.objectContaining({ dropIfSlow: true }),
     );
+  });
+
+  it("rejects non-string note payloads when closing sessions", async () => {
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "close note type guardrail",
+      },
+      nodes: [],
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const closed = await invokeHandler({
+      method: "desktop.control.session.close",
+      params: {
+        id: createdPayload.id,
+        note: { text: "not-a-string" },
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [],
+    });
+
+    expect(closed.response.ok).toBe(false);
+    expect(closed.response.error?.message).toContain("invalid note");
   });
 
   it("requires write scope to close a desktop control session", async () => {

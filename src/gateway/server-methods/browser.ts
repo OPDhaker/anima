@@ -1609,6 +1609,18 @@ export const browserHandlers: GatewayRequestHandlers = {
         return;
       }
     }
+    if (typed.note !== undefined && typeof typed.note !== "string") {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, `invalid note: ${String(typed.note)}`, {
+          details: {
+            expectedType: "string",
+          },
+        }),
+      );
+      return;
+    }
     const note = normalizeDesktopSessionNote(typed.note);
     if (
       decisionRaw === "allow" &&
@@ -1695,6 +1707,18 @@ export const browserHandlers: GatewayRequestHandlers = {
     const session = found.session;
     if (session.state === "closed" || session.state === "denied" || session.state === "expired") {
       respond(true, toDesktopControlSessionSnapshot(session, true));
+      return;
+    }
+    if (typed.note !== undefined && typeof typed.note !== "string") {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, `invalid note: ${String(typed.note)}`, {
+          details: {
+            expectedType: "string",
+          },
+        }),
+      );
       return;
     }
     const note = normalizeDesktopSessionNote(typed.note);
