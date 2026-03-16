@@ -591,6 +591,63 @@ describe("desktop control session handlers", () => {
     expect(listed.response.error?.message).toContain("missing scope: operator.read");
   });
 
+  it("rejects non-boolean includeAudit filters when listing sessions", async () => {
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        includeAudit: "true",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(false);
+    expect(listed.response.error?.message).toContain("invalid includeAudit filter: true");
+    expect(listed.response.error?.details).toEqual(
+      expect.objectContaining({
+        expectedType: "boolean",
+      }),
+    );
+  });
+
+  it("rejects non-string list filters when listing sessions", async () => {
+    const invalidFilters: Array<{
+      params: Record<string, unknown>;
+      expectedError: string;
+    }> = [
+      {
+        params: { state: { value: "active" } },
+        expectedError: "invalid state filter",
+      },
+      {
+        params: { decision: { value: "allow" } },
+        expectedError: "invalid decision filter",
+      },
+      {
+        params: { route: { value: "node" } },
+        expectedError: "invalid route filter",
+      },
+      {
+        params: { riskLevel: { value: "elevated" } },
+        expectedError: "invalid riskLevel filter",
+      },
+      {
+        params: { nodeId: { value: "desktop-route-a" } },
+        expectedError: "invalid nodeId filter",
+      },
+    ];
+
+    for (const invalid of invalidFilters) {
+      const listed = await invokeHandler({
+        method: "desktop.control.session.list",
+        params: invalid.params,
+        scopes: ["operator.read"],
+      });
+
+      expect(listed.response.ok).toBe(false);
+      expect(listed.response.error?.message).toContain(invalid.expectedError);
+    }
+  });
+
   it("rejects invalid state filters when listing sessions", async () => {
     const listed = await invokeHandler({
       method: "desktop.control.session.list",

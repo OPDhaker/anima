@@ -1075,9 +1075,39 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const typed = (params ?? {}) as DesktopControlListParams;
-    const includeAudit = typed.includeAudit === true;
-    const stateRawInput = typeof typed.state === "string" ? typed.state.trim() : "";
+    const typed = params ?? {};
+    const includeAuditRaw = typed.includeAudit;
+    if (includeAuditRaw !== undefined && typeof includeAuditRaw !== "boolean") {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid includeAudit filter: ${String(includeAuditRaw)}`,
+          {
+            details: {
+              expectedType: "boolean",
+            },
+          },
+        ),
+      );
+      return;
+    }
+    const includeAudit = includeAuditRaw === true;
+    const stateInput = typed.state;
+    if (stateInput !== undefined && typeof stateInput !== "string") {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, `invalid state filter: ${String(stateInput)}`, {
+          details: {
+            allowedStates: DESKTOP_CONTROL_SESSION_STATES,
+          },
+        }),
+      );
+      return;
+    }
+    const stateRawInput = typeof stateInput === "string" ? stateInput.trim() : "";
     const stateRaw = stateRawInput ? stateRawInput.toLowerCase() : "";
     if (stateRaw && !isDesktopControlSessionState(stateRaw)) {
       respond(
@@ -1091,7 +1121,24 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const decisionRawInput = typeof typed.decision === "string" ? typed.decision.trim() : "";
+    const decisionInput = typed.decision;
+    if (decisionInput !== undefined && typeof decisionInput !== "string") {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid decision filter: ${String(decisionInput)}`,
+          {
+            details: {
+              allowedDecisions: DESKTOP_CONTROL_SESSION_DECISIONS,
+            },
+          },
+        ),
+      );
+      return;
+    }
+    const decisionRawInput = typeof decisionInput === "string" ? decisionInput.trim() : "";
     const decisionRaw = decisionRawInput ? decisionRawInput.toLowerCase() : "";
     if (decisionRaw && !isDesktopControlApprovalDecision(decisionRaw)) {
       respond(
@@ -1105,7 +1152,20 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const routeRawInput = typeof typed.route === "string" ? typed.route.trim() : "";
+    const routeInput = typed.route;
+    if (routeInput !== undefined && typeof routeInput !== "string") {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, `invalid route filter: ${String(routeInput)}`, {
+          details: {
+            allowedRouteKinds: DESKTOP_CONTROL_SESSION_ROUTE_KINDS,
+          },
+        }),
+      );
+      return;
+    }
+    const routeRawInput = typeof routeInput === "string" ? routeInput.trim() : "";
     const routeRaw = routeRawInput ? routeRawInput.toLowerCase() : "";
     if (routeRaw && !isDesktopControlSessionRouteKind(routeRaw)) {
       respond(
@@ -1119,7 +1179,24 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const riskLevelRawInput = typeof typed.riskLevel === "string" ? typed.riskLevel.trim() : "";
+    const riskLevelInput = typed.riskLevel;
+    if (riskLevelInput !== undefined && typeof riskLevelInput !== "string") {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid riskLevel filter: ${String(riskLevelInput)}`,
+          {
+            details: {
+              allowedRiskLevels: DESKTOP_CONTROL_SESSION_RISK_LEVELS,
+            },
+          },
+        ),
+      );
+      return;
+    }
+    const riskLevelRawInput = typeof riskLevelInput === "string" ? riskLevelInput.trim() : "";
     const riskLevelRaw = riskLevelRawInput ? riskLevelRawInput.toLowerCase() : "";
     if (riskLevelRaw && !isDesktopControlSessionRiskLevel(riskLevelRaw)) {
       respond(
@@ -1133,7 +1210,16 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const nodeIdRawInput = typeof typed.nodeId === "string" ? typed.nodeId.trim() : "";
+    const nodeIdInput = typed.nodeId;
+    if (nodeIdInput !== undefined && typeof nodeIdInput !== "string") {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, `invalid nodeId filter: ${String(nodeIdInput)}`),
+      );
+      return;
+    }
+    const nodeIdRawInput = typeof nodeIdInput === "string" ? nodeIdInput.trim() : "";
     const nodeIdFilterKey = nodeIdRawInput ? normalizeNodeKey(nodeIdRawInput) : "";
     if (nodeIdRawInput && !nodeIdFilterKey) {
       respond(
@@ -1201,8 +1287,8 @@ export const browserHandlers: GatewayRequestHandlers = {
     const route = routeRaw || undefined;
     const riskLevel = riskLevelRaw || undefined;
     const nodeId = nodeIdFilterKey || undefined;
-    const limit = limitRaw;
-    const offset = offsetRaw ?? 0;
+    const limit = typeof limitRaw === "number" ? limitRaw : undefined;
+    const offset = typeof offsetRaw === "number" ? offsetRaw : 0;
     const filtered = Array.from(desktopControlSessions.values())
       .filter((entry) => {
         if (state && entry.state !== state) {
