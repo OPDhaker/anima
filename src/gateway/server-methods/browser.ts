@@ -1213,6 +1213,23 @@ export const browserHandlers: GatewayRequestHandlers = {
       return;
     }
     const note = normalizeDesktopSessionNote(typed.note);
+    const actor = resolveClientActor(client);
+    if (session.state === "pending_approval" && !hasDecisionRationale(note)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `note must be at least ${DESKTOP_CONTROL_MIN_DECISION_NOTE_LEN} characters when manually closing pending desktop control sessions`,
+          {
+            details: {
+              minNoteLength: DESKTOP_CONTROL_MIN_DECISION_NOTE_LEN,
+            },
+          },
+        ),
+      );
+      return;
+    }
     if (session.state === "active" && !hasDecisionRationale(note)) {
       respond(
         false,
@@ -1230,11 +1247,17 @@ export const browserHandlers: GatewayRequestHandlers = {
       return;
     }
     const now = Date.now();
+    if (session.state === "pending_approval") {
+      session.approval.decision = "deny";
+      session.approval.decidedAtMs = now;
+      session.approval.decidedBy = actor;
+      session.approval.note = note;
+    }
     session.state = "closed";
     session.closedAtMs = now;
     appendDesktopControlAudit(session, {
       type: "session.closed",
-      actor: resolveClientActor(client),
+      actor,
       details: {
         note,
       },
@@ -1243,7 +1266,7 @@ export const browserHandlers: GatewayRequestHandlers = {
       context,
       action: "closed",
       session,
-      actor: resolveClientActor(client),
+      actor,
       details: {
         note,
       },

@@ -444,6 +444,127 @@ describe("desktop control session handlers", () => {
     );
   });
 
+  it("requires rationale and records a deny decision when closing a pending session", async () => {
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "pending close rationale guardrail",
+      },
+      nodes: [],
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const missingNote = await invokeHandler({
+      method: "desktop.control.session.close",
+      params: {
+        id: createdPayload.id,
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [],
+    });
+    expect(missingNote.response.ok).toBe(false);
+    expect(missingNote.response.error?.message).toContain("at least");
+
+    const shortNote = await invokeHandler({
+      method: "desktop.control.session.close",
+      params: {
+        id: createdPayload.id,
+        note: "skip",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [],
+    });
+    expect(shortNote.response.ok).toBe(false);
+    expect(shortNote.response.error?.message).toContain("at least");
+
+    const closed = await invokeHandler({
+      method: "desktop.control.session.close",
+      params: {
+        id: createdPayload.id,
+        note: "Closing before approval due to changed operator context.",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [],
+    });
+    expect(closed.response.ok).toBe(true);
+    expect(closed.response.payload).toEqual(
+      expect.objectContaining({
+        state: "closed",
+        approval: expect.objectContaining({
+          decision: "deny",
+          decidedBy: "Operator Test",
+          note: "Closing before approval due to changed operator context.",
+        }),
+      }),
+    );
+    expect(closed.broadcast).toHaveBeenCalledWith(
+      "desktop.control.session.updated",
+      expect.objectContaining({
+        action: "closed",
+        details: expect.objectContaining({
+          note: "Closing before approval due to changed operator context.",
+        }),
+      }),
+      expect.objectContaining({ dropIfSlow: true }),
+    );
+  });
+
+  it("is idempotent when close is called on an already closed session", async () => {
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "closed-state idempotency",
+      },
+      nodes: [],
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [],
+    });
+
+    const firstClose = await invokeHandler({
+      method: "desktop.control.session.close",
+      params: {
+        id: createdPayload.id,
+        note: "Closing after finishing requested troubleshooting.",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [],
+    });
+    expect(firstClose.response.ok).toBe(true);
+    const firstPayload = firstClose.response.payload as {
+      state: string;
+      closedAtMs: number | null;
+    };
+    expect(firstPayload.state).toBe("closed");
+    expect(typeof firstPayload.closedAtMs).toBe("number");
+
+    const secondClose = await invokeHandler({
+      method: "desktop.control.session.close",
+      params: {
+        id: createdPayload.id,
+        note: "Second close should be no-op.",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [],
+    });
+    expect(secondClose.response.ok).toBe(true);
+    expect(secondClose.response.payload).toEqual(
+      expect.objectContaining({
+        state: "closed",
+        closedAtMs: firstPayload.closedAtMs,
+      }),
+    );
+    expect(secondClose.broadcast).not.toHaveBeenCalled();
+  });
+
   it("keeps denied sessions denied when close is called", async () => {
     const created = await invokeHandler({
       method: "desktop.control.session.create",
