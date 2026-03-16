@@ -663,6 +663,25 @@ describe("desktop control session handlers", () => {
     );
   });
 
+  it("rejects invalid limit filters when listing sessions", async () => {
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        limit: 0,
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(false);
+    expect(listed.response.error?.message).toContain("invalid limit filter");
+    expect(listed.response.error?.details).toEqual(
+      expect.objectContaining({
+        minLimit: 1,
+        maxLimit: 500,
+      }),
+    );
+  });
+
   it("rejects nodeId filters when route=local", async () => {
     const listed = await invokeHandler({
       method: "desktop.control.session.list",
@@ -675,6 +694,63 @@ describe("desktop control session handlers", () => {
 
     expect(listed.response.ok).toBe(false);
     expect(listed.response.error?.message).toContain("nodeId filter requires route=node");
+  });
+
+  it("applies limit and returns truncation metadata when listing sessions", async () => {
+    const now = new Date("2026-03-16T00:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    try {
+      const first = await invokeHandler({
+        method: "desktop.control.session.create",
+        params: { reason: "list limit session first" },
+        scopes: ["operator.write", "operator.read"],
+      });
+      const firstPayload = first.response.payload as { id: string };
+
+      vi.setSystemTime(new Date(now.getTime() + 1_000));
+      const second = await invokeHandler({
+        method: "desktop.control.session.create",
+        params: { reason: "list limit session second" },
+        scopes: ["operator.write", "operator.read"],
+      });
+      const secondPayload = second.response.payload as { id: string };
+
+      vi.setSystemTime(new Date(now.getTime() + 2_000));
+      const third = await invokeHandler({
+        method: "desktop.control.session.create",
+        params: { reason: "list limit session third" },
+        scopes: ["operator.write", "operator.read"],
+      });
+      const thirdPayload = third.response.payload as { id: string };
+
+      const listed = await invokeHandler({
+        method: "desktop.control.session.list",
+        params: {
+          limit: 2,
+        },
+        scopes: ["operator.read"],
+      });
+
+      expect(listed.response.ok).toBe(true);
+      const payload = listed.response.payload as {
+        total: number;
+        returned: number;
+        truncated: boolean;
+        sessions: Array<{ id: string }>;
+      };
+      expect(payload.total).toBe(3);
+      expect(payload.returned).toBe(2);
+      expect(payload.truncated).toBe(true);
+      expect(payload.sessions.map((session) => session.id)).toEqual([
+        thirdPayload.id,
+        secondPayload.id,
+      ]);
+      expect(payload.sessions.map((session) => session.id)).not.toContain(firstPayload.id);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("filters listed sessions by a valid state", async () => {

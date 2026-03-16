@@ -201,6 +201,7 @@ type DesktopControlListParams = {
   route?: DesktopControlSessionRouteKind;
   riskLevel?: DesktopControlSessionRiskLevel;
   nodeId?: string;
+  limit?: number;
 };
 
 type DesktopControlCloseParams = {
@@ -224,6 +225,8 @@ const DESKTOP_CONTROL_MIN_MAX_REQUESTS = 1;
 const DESKTOP_CONTROL_MAX_MAX_REQUESTS = 500;
 const DESKTOP_CONTROL_MAX_NOTE_LEN = 500;
 const DESKTOP_CONTROL_MIN_DECISION_NOTE_LEN = 8;
+const DESKTOP_CONTROL_LIST_MIN_LIMIT = 1;
+const DESKTOP_CONTROL_LIST_MAX_LIMIT = 500;
 const DESKTOP_CONTROL_SESSION_STATES: DesktopControlSessionState[] = [
   "pending_approval",
   "active",
@@ -1069,7 +1072,7 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const typed = params as DesktopControlListParams;
+    const typed = (params ?? {}) as DesktopControlListParams;
     const includeAudit = typed.includeAudit === true;
     const stateRaw = typeof typed.state === "string" ? typed.state.trim() : "";
     if (stateRaw && !isDesktopControlSessionState(stateRaw)) {
@@ -1137,12 +1140,34 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
+    const limitRaw = typed.limit;
+    if (limitRaw !== undefined) {
+      if (
+        typeof limitRaw !== "number" ||
+        !Number.isInteger(limitRaw) ||
+        limitRaw < DESKTOP_CONTROL_LIST_MIN_LIMIT ||
+        limitRaw > DESKTOP_CONTROL_LIST_MAX_LIMIT
+      ) {
+        respond(
+          false,
+          undefined,
+          errorShape(ErrorCodes.INVALID_REQUEST, `invalid limit filter: ${String(limitRaw)}`, {
+            details: {
+              minLimit: DESKTOP_CONTROL_LIST_MIN_LIMIT,
+              maxLimit: DESKTOP_CONTROL_LIST_MAX_LIMIT,
+            },
+          }),
+        );
+        return;
+      }
+    }
     const state = stateRaw || undefined;
     const decision = decisionRaw || undefined;
     const route = routeRaw || undefined;
     const riskLevel = riskLevelRaw || undefined;
     const nodeId = nodeIdRaw || undefined;
-    const sessions = Array.from(desktopControlSessions.values())
+    const limit = limitRaw;
+    const filtered = Array.from(desktopControlSessions.values())
       .filter((entry) => {
         if (state && entry.state !== state) {
           return false;
@@ -1161,11 +1186,16 @@ export const browserHandlers: GatewayRequestHandlers = {
         }
         return true;
       })
-      .toSorted((a, b) => b.createdAtMs - a.createdAtMs)
+      .toSorted((a, b) => b.createdAtMs - a.createdAtMs);
+    const total = filtered.length;
+    const sessions = filtered
+      .slice(0, limit ?? total)
       .map((entry) => toDesktopControlSessionSnapshot(entry, includeAudit));
     respond(true, {
       ts: Date.now(),
-      total: sessions.length,
+      total,
+      returned: sessions.length,
+      truncated: sessions.length < total,
       sessions,
     });
   },
