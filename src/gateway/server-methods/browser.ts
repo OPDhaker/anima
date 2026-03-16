@@ -202,6 +202,7 @@ type DesktopControlListParams = {
   riskLevel?: DesktopControlSessionRiskLevel;
   nodeId?: string;
   limit?: number;
+  offset?: number;
 };
 
 type DesktopControlCloseParams = {
@@ -227,6 +228,8 @@ const DESKTOP_CONTROL_MAX_NOTE_LEN = 500;
 const DESKTOP_CONTROL_MIN_DECISION_NOTE_LEN = 8;
 const DESKTOP_CONTROL_LIST_MIN_LIMIT = 1;
 const DESKTOP_CONTROL_LIST_MAX_LIMIT = 500;
+const DESKTOP_CONTROL_LIST_MIN_OFFSET = 0;
+const DESKTOP_CONTROL_LIST_MAX_OFFSET = 10_000;
 const DESKTOP_CONTROL_SESSION_STATES: DesktopControlSessionState[] = [
   "pending_approval",
   "active",
@@ -1161,12 +1164,34 @@ export const browserHandlers: GatewayRequestHandlers = {
         return;
       }
     }
+    const offsetRaw = typed.offset;
+    if (offsetRaw !== undefined) {
+      if (
+        typeof offsetRaw !== "number" ||
+        !Number.isInteger(offsetRaw) ||
+        offsetRaw < DESKTOP_CONTROL_LIST_MIN_OFFSET ||
+        offsetRaw > DESKTOP_CONTROL_LIST_MAX_OFFSET
+      ) {
+        respond(
+          false,
+          undefined,
+          errorShape(ErrorCodes.INVALID_REQUEST, `invalid offset filter: ${String(offsetRaw)}`, {
+            details: {
+              minOffset: DESKTOP_CONTROL_LIST_MIN_OFFSET,
+              maxOffset: DESKTOP_CONTROL_LIST_MAX_OFFSET,
+            },
+          }),
+        );
+        return;
+      }
+    }
     const state = stateRaw || undefined;
     const decision = decisionRaw || undefined;
     const route = routeRaw || undefined;
     const riskLevel = riskLevelRaw || undefined;
     const nodeId = nodeIdRaw || undefined;
     const limit = limitRaw;
+    const offset = offsetRaw ?? 0;
     const filtered = Array.from(desktopControlSessions.values())
       .filter((entry) => {
         if (state && entry.state !== state) {
@@ -1188,14 +1213,19 @@ export const browserHandlers: GatewayRequestHandlers = {
       })
       .toSorted((a, b) => b.createdAtMs - a.createdAtMs);
     const total = filtered.length;
+    const sliceEnd = limit === undefined ? undefined : offset + limit;
     const sessions = filtered
-      .slice(0, limit ?? total)
+      .slice(offset, sliceEnd)
       .map((entry) => toDesktopControlSessionSnapshot(entry, includeAudit));
+    const returned = sessions.length;
+    const hasMore = offset + returned < total;
     respond(true, {
       ts: Date.now(),
       total,
-      returned: sessions.length,
-      truncated: sessions.length < total,
+      returned,
+      offset,
+      nextOffset: hasMore ? offset + returned : null,
+      truncated: offset > 0 || hasMore,
       sessions,
     });
   },

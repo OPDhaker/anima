@@ -682,6 +682,25 @@ describe("desktop control session handlers", () => {
     );
   });
 
+  it("rejects invalid offset filters when listing sessions", async () => {
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        offset: -1,
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(false);
+    expect(listed.response.error?.message).toContain("invalid offset filter");
+    expect(listed.response.error?.details).toEqual(
+      expect.objectContaining({
+        minOffset: 0,
+        maxOffset: 10000,
+      }),
+    );
+  });
+
   it("rejects nodeId filters when route=local", async () => {
     const listed = await invokeHandler({
       method: "desktop.control.session.list",
@@ -737,16 +756,80 @@ describe("desktop control session handlers", () => {
       const payload = listed.response.payload as {
         total: number;
         returned: number;
+        offset: number;
+        nextOffset: number | null;
         truncated: boolean;
         sessions: Array<{ id: string }>;
       };
       expect(payload.total).toBe(3);
       expect(payload.returned).toBe(2);
+      expect(payload.offset).toBe(0);
+      expect(payload.nextOffset).toBe(2);
       expect(payload.truncated).toBe(true);
       expect(payload.sessions.map((session) => session.id)).toEqual([
         thirdPayload.id,
         secondPayload.id,
       ]);
+      expect(payload.sessions.map((session) => session.id)).not.toContain(firstPayload.id);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("applies offset windows when listing sessions", async () => {
+    const now = new Date("2026-03-16T00:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    try {
+      const first = await invokeHandler({
+        method: "desktop.control.session.create",
+        params: { reason: "list offset session first" },
+        scopes: ["operator.write", "operator.read"],
+      });
+      const firstPayload = first.response.payload as { id: string };
+
+      vi.setSystemTime(new Date(now.getTime() + 1_000));
+      const second = await invokeHandler({
+        method: "desktop.control.session.create",
+        params: { reason: "list offset session second" },
+        scopes: ["operator.write", "operator.read"],
+      });
+      const secondPayload = second.response.payload as { id: string };
+
+      vi.setSystemTime(new Date(now.getTime() + 2_000));
+      const third = await invokeHandler({
+        method: "desktop.control.session.create",
+        params: { reason: "list offset session third" },
+        scopes: ["operator.write", "operator.read"],
+      });
+      const thirdPayload = third.response.payload as { id: string };
+
+      const listed = await invokeHandler({
+        method: "desktop.control.session.list",
+        params: {
+          offset: 1,
+          limit: 1,
+        },
+        scopes: ["operator.read"],
+      });
+
+      expect(listed.response.ok).toBe(true);
+      const payload = listed.response.payload as {
+        total: number;
+        returned: number;
+        offset: number;
+        nextOffset: number | null;
+        truncated: boolean;
+        sessions: Array<{ id: string }>;
+      };
+      expect(payload.total).toBe(3);
+      expect(payload.returned).toBe(1);
+      expect(payload.offset).toBe(1);
+      expect(payload.nextOffset).toBe(2);
+      expect(payload.truncated).toBe(true);
+      expect(payload.sessions.map((session) => session.id)).toEqual([secondPayload.id]);
+      expect(payload.sessions.map((session) => session.id)).not.toContain(thirdPayload.id);
       expect(payload.sessions.map((session) => session.id)).not.toContain(firstPayload.id);
     } finally {
       vi.useRealTimers();
