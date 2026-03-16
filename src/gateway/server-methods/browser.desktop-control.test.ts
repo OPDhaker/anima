@@ -2506,6 +2506,114 @@ describe("desktop control session handlers", () => {
     expect(invokeMock).toHaveBeenCalledTimes(2);
   });
 
+  it("blocks overlapping requests when remaining budget is reserved in-flight", async () => {
+    const browserNode = createNode({
+      nodeId: "desktop-budget-race",
+      displayName: "Desktop Budget Race",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+    let releaseFirstInvoke: ((value: { ok: boolean; payloadJSON: string }) => void) | null = null;
+    let markFirstInvokeStarted: (() => void) | null = null;
+    const firstInvokeStarted = new Promise<void>((resolve) => {
+      markFirstInvokeStarted = resolve;
+    });
+    const firstInvokeResult = new Promise<{ ok: boolean; payloadJSON: string }>((resolve) => {
+      releaseFirstInvoke = resolve;
+    });
+    const invokeMock = vi.fn().mockImplementationOnce(async () => {
+      markFirstInvokeStarted?.();
+      return firstInvokeResult;
+    });
+
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "in-flight request budget reservation",
+        nodeId: "desktop-budget-race",
+        maxRequests: 1,
+      },
+      nodes: [browserNode],
+      invokeMock,
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+
+    const firstRequest = invokeHandler({
+      method: "desktop.control.session.request",
+      params: {
+        id: createdPayload.id,
+        method: "GET",
+        path: "/status",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+    await firstInvokeStarted;
+
+    const overlappingRequest = await invokeHandler({
+      method: "desktop.control.session.request",
+      params: {
+        id: createdPayload.id,
+        method: "GET",
+        path: "/status",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+    expect(overlappingRequest.response.ok).toBe(false);
+    expect(overlappingRequest.response.error?.message).toContain(
+      "session request budget reserved by in-flight requests",
+    );
+    expect(overlappingRequest.response.error?.details).toEqual(
+      expect.objectContaining({
+        state: "active",
+        decision: "allow",
+        requestCount: 0,
+        inFlightRequests: 1,
+        maxRequests: 1,
+        expiresAtMs: expect.any(Number),
+      }),
+    );
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+
+    expect(releaseFirstInvoke).not.toBeNull();
+    releaseFirstInvoke?.({
+      ok: true,
+      payloadJSON: JSON.stringify({ result: { ok: true } }),
+    });
+    const firstCompleted = await firstRequest;
+    expect(firstCompleted.response.ok).toBe(true);
+    expect(firstCompleted.response.payload).toEqual({ ok: true });
+
+    const after = await invokeHandler({
+      method: "desktop.control.session.get",
+      params: { id: createdPayload.id },
+      scopes: ["operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+    expect(after.response.ok).toBe(true);
+    expect(after.response.payload).toEqual(
+      expect.objectContaining({
+        state: "closed",
+        requestCount: 1,
+      }),
+    );
+  });
+
   it("auto-closes a session when max request budget is exhausted", async () => {
     const browserNode = createNode({
       nodeId: "desktop-3",

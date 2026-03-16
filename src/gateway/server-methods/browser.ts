@@ -145,6 +145,7 @@ type DesktopControlSessionRecord = {
   controls: DesktopControlSessionControls;
   risk: DesktopControlSessionRisk;
   requestCount: number;
+  inFlightRequestCount: number;
   lastRequestAtMs: number | null;
   closedAtMs: number | null;
   audit: DesktopControlAuditEvent[];
@@ -1238,6 +1239,7 @@ export const browserHandlers: GatewayRequestHandlers = {
       },
       risk,
       requestCount: 0,
+      inFlightRequestCount: 0,
       lastRequestAtMs: null,
       closedAtMs: null,
       audit: [],
@@ -1907,6 +1909,7 @@ export const browserHandlers: GatewayRequestHandlers = {
               state: session.state,
               decision: session.approval.decision,
               requestCount: session.requestCount,
+              inFlightRequests: session.inFlightRequestCount,
               maxRequests: session.controls.maxRequests,
               expiresAtMs: session.expiresAtMs,
             },
@@ -2032,6 +2035,50 @@ export const browserHandlers: GatewayRequestHandlers = {
               state: session.state,
               decision: session.approval.decision,
               requestCount: session.requestCount,
+              inFlightRequests: session.inFlightRequestCount,
+              maxRequests: session.controls.maxRequests,
+              expiresAtMs: session.expiresAtMs,
+            },
+          },
+        ),
+      );
+      return;
+    }
+    if (session.requestCount + session.inFlightRequestCount >= session.controls.maxRequests) {
+      appendDesktopControlAudit(session, {
+        type: "request.error",
+        actor,
+        details: {
+          reason: "request budget reserved by in-flight requests",
+          requestCount: session.requestCount,
+          inFlightRequests: session.inFlightRequestCount,
+          maxRequests: session.controls.maxRequests,
+        },
+      });
+      broadcastDesktopControlSessionEvent({
+        context,
+        action: "request_error",
+        session,
+        actor,
+        details: {
+          reason: "request budget reserved by in-flight requests",
+          requestCount: session.requestCount,
+          inFlightRequests: session.inFlightRequestCount,
+          maxRequests: session.controls.maxRequests,
+        },
+      });
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `session request budget reserved by in-flight requests (${session.controls.maxRequests})`,
+          {
+            details: {
+              state: session.state,
+              decision: session.approval.decision,
+              requestCount: session.requestCount,
+              inFlightRequests: session.inFlightRequestCount,
               maxRequests: session.controls.maxRequests,
               expiresAtMs: session.expiresAtMs,
             },
@@ -2093,12 +2140,40 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const result = await dispatchBrowserRequest({
-      cfg: loadConfig(),
-      request: normalized.request,
-      context,
-      nodeTarget,
-    });
+    session.inFlightRequestCount += 1;
+    let result: BrowserDispatchResult;
+    try {
+      result = await dispatchBrowserRequest({
+        cfg: loadConfig(),
+        request: normalized.request,
+        context,
+        nodeTarget,
+      });
+    } catch (error) {
+      session.inFlightRequestCount = Math.max(0, session.inFlightRequestCount - 1);
+      const message = error instanceof Error ? error.message : String(error);
+      appendDesktopControlAudit(session, {
+        type: "request.error",
+        actor,
+        details: {
+          reason: "dispatch threw",
+          message,
+        },
+      });
+      broadcastDesktopControlSessionEvent({
+        context,
+        action: "request_error",
+        session,
+        actor,
+        details: {
+          reason: "dispatch threw",
+          message,
+        },
+      });
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, message));
+      return;
+    }
+    session.inFlightRequestCount = Math.max(0, session.inFlightRequestCount - 1);
     if (!result.ok) {
       appendDesktopControlAudit(session, {
         type: "request.error",
