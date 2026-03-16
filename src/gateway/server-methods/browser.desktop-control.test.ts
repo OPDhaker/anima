@@ -22,7 +22,7 @@ type RpcResponse = {
 
 async function invokeHandler(options: {
   method: string;
-  params?: Record<string, unknown>;
+  params?: unknown;
   nodes?: NodeSession[];
   scopes?: string[];
   invokeMock?: ReturnType<typeof vi.fn>;
@@ -48,7 +48,9 @@ async function invokeHandler(options: {
       id: "test-req",
       method: options.method,
     } as never,
-    params: options.params ?? {},
+    params: Object.prototype.hasOwnProperty.call(options, "params")
+      ? (options.params as never)
+      : {},
     client: {
       connect: {
         scopes: options.scopes ?? ["operator.write", "operator.read", "operator.approvals"],
@@ -218,6 +220,24 @@ describe("desktop control session handlers", () => {
 
     expect(approve.response.ok).toBe(false);
     expect(approve.response.error?.message).toContain("missing scope: operator.approvals");
+  });
+
+  it("returns id is required when params payload is missing for approve/close/request", async () => {
+    const methods = [
+      "desktop.control.session.approve",
+      "desktop.control.session.close",
+      "desktop.control.session.request",
+    ] as const;
+
+    for (const method of methods) {
+      const result = await invokeHandler({
+        method,
+        params: undefined,
+      });
+
+      expect(result.response.ok).toBe(false);
+      expect(result.response.error?.message).toContain("id is required");
+    }
   });
 
   it("rejects approval when a session was already manually closed", async () => {

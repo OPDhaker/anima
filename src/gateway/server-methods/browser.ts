@@ -1501,7 +1501,7 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const typed = params as DesktopControlDecisionParams;
+    const typed = (params ?? {}) as DesktopControlDecisionParams & Record<string, unknown>;
     const found = ensureDesktopSessionExists(typed.id);
     if (!found.ok) {
       respond(false, undefined, found.error);
@@ -1666,7 +1666,7 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const typed = params as DesktopControlCloseParams;
+    const typed = (params ?? {}) as DesktopControlCloseParams & Record<string, unknown>;
     const found = ensureDesktopSessionExists(typed.id);
     if (!found.ok) {
       respond(false, undefined, found.error);
@@ -1748,7 +1748,7 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const typed = params as DesktopControlRequestParams;
+    const typed = (params ?? {}) as DesktopControlRequestParams & Record<string, unknown>;
     const found = ensureDesktopSessionExists(typed.id);
     if (!found.ok) {
       respond(false, undefined, found.error);
