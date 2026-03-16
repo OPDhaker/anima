@@ -609,6 +609,46 @@ describe("desktop control session handlers", () => {
     );
   });
 
+  it("treats state filters as case-insensitive when listing sessions", async () => {
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: { reason: "case-insensitive state filter" },
+      scopes: ["operator.write", "operator.read"],
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const approved = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+    });
+    expect(approved.response.ok).toBe(true);
+
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        state: " ACTIVE ",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(true);
+    const payload = listed.response.payload as {
+      sessions: Array<{ id: string; state: string }>;
+    };
+    expect(payload.sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: createdPayload.id,
+          state: "active",
+        }),
+      ]),
+    );
+  });
+
   it("rejects invalid decision filters when listing sessions", async () => {
     const listed = await invokeHandler({
       method: "desktop.control.session.list",

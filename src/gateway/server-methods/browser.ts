@@ -1077,12 +1077,13 @@ export const browserHandlers: GatewayRequestHandlers = {
     }
     const typed = (params ?? {}) as DesktopControlListParams;
     const includeAudit = typed.includeAudit === true;
-    const stateRaw = typeof typed.state === "string" ? typed.state.trim() : "";
+    const stateRawInput = typeof typed.state === "string" ? typed.state.trim() : "";
+    const stateRaw = stateRawInput ? stateRawInput.toLowerCase() : "";
     if (stateRaw && !isDesktopControlSessionState(stateRaw)) {
       respond(
         false,
         undefined,
-        errorShape(ErrorCodes.INVALID_REQUEST, `invalid state filter: ${stateRaw}`, {
+        errorShape(ErrorCodes.INVALID_REQUEST, `invalid state filter: ${stateRawInput}`, {
           details: {
             allowedStates: DESKTOP_CONTROL_SESSION_STATES,
           },
