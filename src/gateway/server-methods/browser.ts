@@ -1135,6 +1135,14 @@ export const browserHandlers: GatewayRequestHandlers = {
     }
     const nodeIdRawInput = typeof typed.nodeId === "string" ? typed.nodeId.trim() : "";
     const nodeIdFilterKey = nodeIdRawInput ? normalizeNodeKey(nodeIdRawInput) : "";
+    if (nodeIdRawInput && !nodeIdFilterKey) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, `invalid nodeId filter: ${nodeIdRawInput}`),
+      );
+      return;
+    }
     if (routeRaw === "local" && nodeIdRawInput) {
       respond(
         false,

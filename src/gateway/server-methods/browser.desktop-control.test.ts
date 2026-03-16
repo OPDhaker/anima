@@ -874,6 +874,20 @@ describe("desktop control session handlers", () => {
     expect(listed.response.error?.message).toContain("nodeId filter requires route=node");
   });
 
+  it("rejects invalid nodeId filters when listing sessions", async () => {
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        route: "node",
+        nodeId: "---",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(false);
+    expect(listed.response.error?.message).toContain("invalid nodeId filter");
+  });
+
   it("applies limit and returns truncation metadata when listing sessions", async () => {
     const now = new Date("2026-03-16T00:00:00.000Z");
     vi.useFakeTimers();
