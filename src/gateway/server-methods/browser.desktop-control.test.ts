@@ -2420,6 +2420,66 @@ describe("desktop control session handlers", () => {
     expect(invokeMock).toHaveBeenCalledTimes(0);
   });
 
+  it("rejects non-object query payloads for desktop control requests", async () => {
+    const browserNode = createNode({
+      nodeId: "desktop-query",
+      displayName: "Desktop Query",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+    const invokeMock = vi.fn(async () => ({
+      ok: true,
+      payloadJSON: JSON.stringify({ result: { ok: true } }),
+    }));
+
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "query payload guardrail",
+        nodeId: "desktop-query",
+      },
+      nodes: [browserNode],
+      invokeMock,
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+
+    for (const query of ["status=1", ["status"]] as const) {
+      const requested = await invokeHandler({
+        method: "desktop.control.session.request",
+        params: {
+          id: createdPayload.id,
+          method: "GET",
+          path: "/status",
+          query,
+        },
+        scopes: ["operator.write", "operator.read"],
+        nodes: [browserNode],
+        invokeMock,
+      });
+
+      expect(requested.response.ok).toBe(false);
+      expect(requested.response.error?.message).toContain("invalid query");
+      expect(requested.response.error?.details).toEqual(
+        expect.objectContaining({
+          expectedType: "object",
+        }),
+      );
+    }
+
+    expect(invokeMock).toHaveBeenCalledTimes(0);
+  });
+
   it("does not consume request budget when dispatch fails", async () => {
     const browserNode = createNode({
       nodeId: "desktop-budget",

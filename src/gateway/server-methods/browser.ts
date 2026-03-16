@@ -748,7 +748,7 @@ function normalizeBrowserRequest(
   | { ok: false; error: ReturnType<typeof errorShape> } {
   const methodRaw = typeof params.method === "string" ? params.method.trim().toUpperCase() : "";
   const path = typeof params.path === "string" ? params.path.trim() : "";
-  const query = params.query && typeof params.query === "object" ? params.query : undefined;
+  const queryRaw = params.query;
   const body = params.body;
   const timeoutRaw = params.timeoutMs;
 
@@ -769,6 +769,18 @@ function normalizeBrowserRequest(
       ok: false,
       error: errorShape(ErrorCodes.INVALID_REQUEST, "path must start with /"),
     };
+  }
+  if (queryRaw !== undefined) {
+    if (!queryRaw || typeof queryRaw !== "object" || Array.isArray(queryRaw)) {
+      return {
+        ok: false,
+        error: errorShape(ErrorCodes.INVALID_REQUEST, `invalid query: ${String(queryRaw)}`, {
+          details: {
+            expectedType: "object",
+          },
+        }),
+      };
+    }
   }
   if (timeoutRaw !== undefined) {
     if (
@@ -791,6 +803,7 @@ function normalizeBrowserRequest(
     }
   }
   const timeoutMs = typeof timeoutRaw === "number" ? Math.floor(timeoutRaw) : undefined;
+  const query = queryRaw;
 
   return {
     ok: true,
