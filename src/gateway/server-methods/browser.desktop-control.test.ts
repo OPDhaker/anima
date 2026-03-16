@@ -627,6 +627,42 @@ describe("desktop control session handlers", () => {
     );
   });
 
+  it("rejects invalid route filters when listing sessions", async () => {
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        route: "edge",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(false);
+    expect(listed.response.error?.message).toContain("invalid route filter");
+    expect(listed.response.error?.details).toEqual(
+      expect.objectContaining({
+        allowedRouteKinds: ["local", "node"],
+      }),
+    );
+  });
+
+  it("rejects invalid riskLevel filters when listing sessions", async () => {
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        riskLevel: "high",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(false);
+    expect(listed.response.error?.message).toContain("invalid riskLevel filter");
+    expect(listed.response.error?.details).toEqual(
+      expect.objectContaining({
+        allowedRiskLevels: ["standard", "elevated"],
+      }),
+    );
+  });
+
   it("filters listed sessions by a valid state", async () => {
     const first = await invokeHandler({
       method: "desktop.control.session.create",
@@ -758,6 +794,113 @@ describe("desktop control session handlers", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: allowedPayload.id,
+        }),
+      ]),
+    );
+  });
+
+  it("filters listed sessions by route kind", async () => {
+    const browserNode = createNode({
+      nodeId: "desktop-route",
+      displayName: "Desktop Route",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+
+    const local = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: { reason: "route filter local session" },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [],
+    });
+    const localPayload = local.response.payload as { id: string };
+
+    const node = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "route filter node session",
+        nodeId: "desktop-route",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [browserNode],
+    });
+    const nodePayload = node.response.payload as { id: string };
+
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        route: "node",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(true);
+    const payload = listed.response.payload as {
+      sessions: Array<{ id: string; route: { kind: string } }>;
+    };
+    expect(payload.sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: nodePayload.id,
+          route: expect.objectContaining({
+            kind: "node",
+          }),
+        }),
+      ]),
+    );
+    expect(payload.sessions).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: localPayload.id,
+        }),
+      ]),
+    );
+  });
+
+  it("filters listed sessions by risk level", async () => {
+    const standard = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: { reason: "risk filter standard session" },
+      scopes: ["operator.write", "operator.read"],
+    });
+    const standardPayload = standard.response.payload as { id: string };
+
+    const elevated = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "risk filter elevated session",
+        allowMethods: ["GET", "POST"],
+      },
+      scopes: ["operator.write", "operator.read"],
+    });
+    const elevatedPayload = elevated.response.payload as { id: string };
+
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        riskLevel: "elevated",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(true);
+    const payload = listed.response.payload as {
+      sessions: Array<{ id: string; risk: { level: string } }>;
+    };
+    expect(payload.sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: elevatedPayload.id,
+          risk: expect.objectContaining({
+            level: "elevated",
+          }),
+        }),
+      ]),
+    );
+    expect(payload.sessions).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: standardPayload.id,
         }),
       ]),
     );

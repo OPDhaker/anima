@@ -94,6 +94,7 @@ type DesktopControlSessionRisk = {
 };
 
 type DesktopControlSessionState = "pending_approval" | "active" | "denied" | "closed" | "expired";
+type DesktopControlSessionRouteKind = "local" | "node";
 
 type DesktopControlSessionRoute =
   | {
@@ -197,6 +198,8 @@ type DesktopControlListParams = {
   includeAudit?: boolean;
   state?: DesktopControlSessionState;
   decision?: DesktopControlApprovalDecision;
+  route?: DesktopControlSessionRouteKind;
+  riskLevel?: DesktopControlSessionRiskLevel;
 };
 
 type DesktopControlCloseParams = {
@@ -231,6 +234,11 @@ const DESKTOP_CONTROL_SESSION_DECISIONS: DesktopControlApprovalDecision[] = [
   "pending",
   "allow",
   "deny",
+];
+const DESKTOP_CONTROL_SESSION_ROUTE_KINDS: DesktopControlSessionRouteKind[] = ["local", "node"];
+const DESKTOP_CONTROL_SESSION_RISK_LEVELS: DesktopControlSessionRiskLevel[] = [
+  "standard",
+  "elevated",
 ];
 
 const desktopControlSessions = new Map<string, DesktopControlSessionRecord>();
@@ -427,6 +435,20 @@ function isDesktopControlApprovalDecision(value: unknown): value is DesktopContr
   return (
     typeof value === "string" &&
     DESKTOP_CONTROL_SESSION_DECISIONS.includes(value as DesktopControlApprovalDecision)
+  );
+}
+
+function isDesktopControlSessionRouteKind(value: unknown): value is DesktopControlSessionRouteKind {
+  return (
+    typeof value === "string" &&
+    DESKTOP_CONTROL_SESSION_ROUTE_KINDS.includes(value as DesktopControlSessionRouteKind)
+  );
+}
+
+function isDesktopControlSessionRiskLevel(value: unknown): value is DesktopControlSessionRiskLevel {
+  return (
+    typeof value === "string" &&
+    DESKTOP_CONTROL_SESSION_RISK_LEVELS.includes(value as DesktopControlSessionRiskLevel)
   );
 }
 
@@ -1075,14 +1097,49 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
+    const routeRaw = typeof typed.route === "string" ? typed.route.trim().toLowerCase() : "";
+    if (routeRaw && !isDesktopControlSessionRouteKind(routeRaw)) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, `invalid route filter: ${routeRaw}`, {
+          details: {
+            allowedRouteKinds: DESKTOP_CONTROL_SESSION_ROUTE_KINDS,
+          },
+        }),
+      );
+      return;
+    }
+    const riskLevelRaw =
+      typeof typed.riskLevel === "string" ? typed.riskLevel.trim().toLowerCase() : "";
+    if (riskLevelRaw && !isDesktopControlSessionRiskLevel(riskLevelRaw)) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, `invalid riskLevel filter: ${riskLevelRaw}`, {
+          details: {
+            allowedRiskLevels: DESKTOP_CONTROL_SESSION_RISK_LEVELS,
+          },
+        }),
+      );
+      return;
+    }
     const state = stateRaw || undefined;
     const decision = decisionRaw || undefined;
+    const route = routeRaw || undefined;
+    const riskLevel = riskLevelRaw || undefined;
     const sessions = Array.from(desktopControlSessions.values())
       .filter((entry) => {
         if (state && entry.state !== state) {
           return false;
         }
         if (decision && entry.approval.decision !== decision) {
+          return false;
+        }
+        if (route && entry.route.kind !== route) {
+          return false;
+        }
+        if (riskLevel && entry.risk.level !== riskLevel) {
           return false;
         }
         return true;
