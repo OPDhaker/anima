@@ -1091,13 +1091,13 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const decisionRaw =
-      typeof typed.decision === "string" ? typed.decision.trim().toLowerCase() : "";
+    const decisionRawInput = typeof typed.decision === "string" ? typed.decision.trim() : "";
+    const decisionRaw = decisionRawInput ? decisionRawInput.toLowerCase() : "";
     if (decisionRaw && !isDesktopControlApprovalDecision(decisionRaw)) {
       respond(
         false,
         undefined,
-        errorShape(ErrorCodes.INVALID_REQUEST, `invalid decision filter: ${decisionRaw}`, {
+        errorShape(ErrorCodes.INVALID_REQUEST, `invalid decision filter: ${decisionRawInput}`, {
           details: {
             allowedDecisions: DESKTOP_CONTROL_SESSION_DECISIONS,
           },
@@ -1105,12 +1105,13 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const routeRaw = typeof typed.route === "string" ? typed.route.trim().toLowerCase() : "";
+    const routeRawInput = typeof typed.route === "string" ? typed.route.trim() : "";
+    const routeRaw = routeRawInput ? routeRawInput.toLowerCase() : "";
     if (routeRaw && !isDesktopControlSessionRouteKind(routeRaw)) {
       respond(
         false,
         undefined,
-        errorShape(ErrorCodes.INVALID_REQUEST, `invalid route filter: ${routeRaw}`, {
+        errorShape(ErrorCodes.INVALID_REQUEST, `invalid route filter: ${routeRawInput}`, {
           details: {
             allowedRouteKinds: DESKTOP_CONTROL_SESSION_ROUTE_KINDS,
           },
@@ -1118,13 +1119,13 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const riskLevelRaw =
-      typeof typed.riskLevel === "string" ? typed.riskLevel.trim().toLowerCase() : "";
+    const riskLevelRawInput = typeof typed.riskLevel === "string" ? typed.riskLevel.trim() : "";
+    const riskLevelRaw = riskLevelRawInput ? riskLevelRawInput.toLowerCase() : "";
     if (riskLevelRaw && !isDesktopControlSessionRiskLevel(riskLevelRaw)) {
       respond(
         false,
         undefined,
-        errorShape(ErrorCodes.INVALID_REQUEST, `invalid riskLevel filter: ${riskLevelRaw}`, {
+        errorShape(ErrorCodes.INVALID_REQUEST, `invalid riskLevel filter: ${riskLevelRawInput}`, {
           details: {
             allowedRiskLevels: DESKTOP_CONTROL_SESSION_RISK_LEVELS,
           },

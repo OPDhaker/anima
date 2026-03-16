@@ -649,17 +649,136 @@ describe("desktop control session handlers", () => {
     );
   });
 
+  it("treats decision filters as case-insensitive when listing sessions", async () => {
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: { reason: "case-insensitive decision filter" },
+      scopes: ["operator.write", "operator.read"],
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const approved = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+    });
+    expect(approved.response.ok).toBe(true);
+
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        decision: " ALLOW ",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(true);
+    const payload = listed.response.payload as {
+      sessions: Array<{ id: string; approval: { decision: string } }>;
+    };
+    expect(payload.sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: createdPayload.id,
+          approval: expect.objectContaining({
+            decision: "allow",
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("treats route filters as case-insensitive when listing sessions", async () => {
+    const browserNode = createNode({
+      nodeId: "desktop-route-case-insensitive",
+      displayName: "Desktop Route Case Insensitive",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "case-insensitive route filter",
+        nodeId: "desktop-route-case-insensitive",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [browserNode],
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        route: " NODE ",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(true);
+    const payload = listed.response.payload as {
+      sessions: Array<{ id: string; route: { kind: string } }>;
+    };
+    expect(payload.sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: createdPayload.id,
+          route: expect.objectContaining({
+            kind: "node",
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("treats riskLevel filters as case-insensitive when listing sessions", async () => {
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "case-insensitive risk filter",
+        allowMethods: ["GET", "POST"],
+      },
+      scopes: ["operator.write", "operator.read"],
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        riskLevel: " ELEVATED ",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(true);
+    const payload = listed.response.payload as {
+      sessions: Array<{ id: string; risk: { level: string } }>;
+    };
+    expect(payload.sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: createdPayload.id,
+          risk: expect.objectContaining({
+            level: "elevated",
+          }),
+        }),
+      ]),
+    );
+  });
+
   it("rejects invalid decision filters when listing sessions", async () => {
     const listed = await invokeHandler({
       method: "desktop.control.session.list",
       params: {
-        decision: "approved",
+        decision: " Approved ",
       },
       scopes: ["operator.read"],
     });
 
     expect(listed.response.ok).toBe(false);
-    expect(listed.response.error?.message).toContain("invalid decision filter");
+    expect(listed.response.error?.message).toContain("invalid decision filter: Approved");
     expect(listed.response.error?.details).toEqual(
       expect.objectContaining({
         allowedDecisions: ["pending", "allow", "deny"],
@@ -671,13 +790,13 @@ describe("desktop control session handlers", () => {
     const listed = await invokeHandler({
       method: "desktop.control.session.list",
       params: {
-        route: "edge",
+        route: " EDGE ",
       },
       scopes: ["operator.read"],
     });
 
     expect(listed.response.ok).toBe(false);
-    expect(listed.response.error?.message).toContain("invalid route filter");
+    expect(listed.response.error?.message).toContain("invalid route filter: EDGE");
     expect(listed.response.error?.details).toEqual(
       expect.objectContaining({
         allowedRouteKinds: ["local", "node"],
@@ -689,13 +808,13 @@ describe("desktop control session handlers", () => {
     const listed = await invokeHandler({
       method: "desktop.control.session.list",
       params: {
-        riskLevel: "high",
+        riskLevel: " HIGH ",
       },
       scopes: ["operator.read"],
     });
 
     expect(listed.response.ok).toBe(false);
-    expect(listed.response.error?.message).toContain("invalid riskLevel filter");
+    expect(listed.response.error?.message).toContain("invalid riskLevel filter: HIGH");
     expect(listed.response.error?.details).toEqual(
       expect.objectContaining({
         allowedRiskLevels: ["standard", "elevated"],
