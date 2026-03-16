@@ -1339,13 +1339,30 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const typed = params as DesktopControlGetParams;
+    const typed = (params ?? {}) as DesktopControlGetParams & Record<string, unknown>;
+    const includeAuditRaw = typed.includeAudit;
+    if (includeAuditRaw !== undefined && typeof includeAuditRaw !== "boolean") {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid includeAudit filter: ${String(includeAuditRaw)}`,
+          {
+            details: {
+              expectedType: "boolean",
+            },
+          },
+        ),
+      );
+      return;
+    }
     const found = ensureDesktopSessionExists(typed.id);
     if (!found.ok) {
       respond(false, undefined, found.error);
       return;
     }
-    respond(true, toDesktopControlSessionSnapshot(found.session, typed.includeAudit === true));
+    respond(true, toDesktopControlSessionSnapshot(found.session, includeAuditRaw === true));
   },
   "desktop.control.session.approve": async ({ params, respond, client, context }) => {
     pruneDesktopControlSessions({ context });

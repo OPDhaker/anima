@@ -591,6 +591,31 @@ describe("desktop control session handlers", () => {
     expect(listed.response.error?.message).toContain("missing scope: operator.read");
   });
 
+  it("rejects non-boolean includeAudit filters when getting a session", async () => {
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: { reason: "invalid get includeAudit filter" },
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const got = await invokeHandler({
+      method: "desktop.control.session.get",
+      params: {
+        id: createdPayload.id,
+        includeAudit: "true",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(got.response.ok).toBe(false);
+    expect(got.response.error?.message).toContain("invalid includeAudit filter: true");
+    expect(got.response.error?.details).toEqual(
+      expect.objectContaining({
+        expectedType: "boolean",
+      }),
+    );
+  });
+
   it("rejects non-boolean includeAudit filters when listing sessions", async () => {
     const listed = await invokeHandler({
       method: "desktop.control.session.list",
