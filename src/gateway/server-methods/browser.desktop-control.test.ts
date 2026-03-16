@@ -17,7 +17,7 @@ function createNode(overrides: Partial<NodeSession>): NodeSession {
 type RpcResponse = {
   ok: boolean;
   payload?: unknown;
-  error?: { message?: string };
+  error?: { message?: string; details?: Record<string, unknown> };
 };
 
 async function invokeHandler(options: {
@@ -63,7 +63,11 @@ async function invokeHandler(options: {
     } as never,
     isWebchatConnect: () => false,
     respond: (ok, payload, error) => {
-      response = { ok, payload, error: error as { message?: string } | undefined };
+      response = {
+        ok,
+        payload,
+        error: error as { message?: string; details?: Record<string, unknown> } | undefined,
+      };
     },
     context: {
       nodeRegistry: {
@@ -176,6 +180,13 @@ describe("desktop control session handlers", () => {
     expect(approveAfterClose.response.error?.message).toContain(
       "session is not pending approval (state: closed)",
     );
+    expect(approveAfterClose.response.error?.details).toEqual(
+      expect.objectContaining({
+        state: "closed",
+        decision: "deny",
+        expiresAtMs: expect.any(Number),
+      }),
+    );
     expect(approveAfterClose.broadcast).not.toHaveBeenCalled();
 
     const after = await invokeHandler({
@@ -223,6 +234,13 @@ describe("desktop control session handlers", () => {
     expect(approveAfterDeny.response.ok).toBe(false);
     expect(approveAfterDeny.response.error?.message).toContain(
       "session is not pending approval (state: denied)",
+    );
+    expect(approveAfterDeny.response.error?.details).toEqual(
+      expect.objectContaining({
+        state: "denied",
+        decision: "deny",
+        expiresAtMs: expect.any(Number),
+      }),
     );
     expect(approveAfterDeny.broadcast).not.toHaveBeenCalled();
 
@@ -272,6 +290,13 @@ describe("desktop control session handlers", () => {
       expect(approveAfterExpiry.response.ok).toBe(false);
       expect(approveAfterExpiry.response.error?.message).toContain(
         "session is not pending approval (state: expired)",
+      );
+      expect(approveAfterExpiry.response.error?.details).toEqual(
+        expect.objectContaining({
+          state: "expired",
+          decision: "pending",
+          expiresAtMs: expect.any(Number),
+        }),
       );
       expect(approveAfterExpiry.broadcast).toHaveBeenCalledWith(
         "desktop.control.session.updated",
@@ -1375,6 +1400,15 @@ describe("desktop control session handlers", () => {
     });
     expect(second.response.ok).toBe(false);
     expect(second.response.error?.message).toContain("session request budget exhausted");
+    expect(second.response.error?.details).toEqual(
+      expect.objectContaining({
+        state: "closed",
+        decision: "allow",
+        requestCount: 1,
+        maxRequests: 1,
+        expiresAtMs: expect.any(Number),
+      }),
+    );
     expect(second.broadcast).toHaveBeenCalledWith(
       "desktop.control.session.updated",
       expect.objectContaining({

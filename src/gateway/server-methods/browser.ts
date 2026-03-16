@@ -1072,6 +1072,13 @@ export const browserHandlers: GatewayRequestHandlers = {
         errorShape(
           ErrorCodes.INVALID_REQUEST,
           `session is not pending approval (state: ${session.state})`,
+          {
+            details: {
+              state: session.state,
+              decision: session.approval.decision,
+              expiresAtMs: session.expiresAtMs,
+            },
+          },
         ),
       );
       return;
@@ -1089,7 +1096,17 @@ export const browserHandlers: GatewayRequestHandlers = {
         session,
         actor: "system",
       });
-      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "session has expired"));
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "session has expired", {
+          details: {
+            state: session.state,
+            decision: session.approval.decision,
+            expiresAtMs: session.expiresAtMs,
+          },
+        }),
+      );
       return;
     }
     const decisionRaw =
@@ -1416,6 +1433,15 @@ export const browserHandlers: GatewayRequestHandlers = {
         errorShape(
           ErrorCodes.INVALID_REQUEST,
           `session request budget exhausted (${session.controls.maxRequests})`,
+          {
+            details: {
+              state: session.state,
+              decision: session.approval.decision,
+              requestCount: session.requestCount,
+              maxRequests: session.controls.maxRequests,
+              expiresAtMs: session.expiresAtMs,
+            },
+          },
         ),
       );
       return;
