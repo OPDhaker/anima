@@ -240,6 +240,41 @@ describe("desktop control session handlers", () => {
     }
   });
 
+  it("rejects non-object params payloads for desktop control session handlers", async () => {
+    const methods = [
+      "desktop.control.session.create",
+      "desktop.control.session.list",
+      "desktop.control.session.get",
+      "desktop.control.session.approve",
+      "desktop.control.session.close",
+      "desktop.control.session.request",
+    ] as const;
+    const invalidParamsCases: Array<{ params: unknown; actualType: string }> = [
+      { params: "invalid", actualType: "string" },
+      { params: 42, actualType: "number" },
+      { params: true, actualType: "boolean" },
+      { params: [], actualType: "array" },
+    ];
+
+    for (const method of methods) {
+      for (const invalidCase of invalidParamsCases) {
+        const result = await invokeHandler({
+          method,
+          params: invalidCase.params,
+        });
+
+        expect(result.response.ok).toBe(false);
+        expect(result.response.error?.message).toContain("invalid params: expected object");
+        expect(result.response.error?.details).toEqual(
+          expect.objectContaining({
+            expectedType: "object",
+            actualType: invalidCase.actualType,
+          }),
+        );
+      }
+    }
+  });
+
   it("rejects non-string id payloads for get/approve/close/request", async () => {
     const methods = [
       "desktop.control.session.get",

@@ -980,6 +980,44 @@ function ensureDesktopSessionExists(
   return { ok: true, session };
 }
 
+function toParamValueType(value: unknown): string {
+  if (value === null) {
+    return "null";
+  }
+  if (Array.isArray(value)) {
+    return "array";
+  }
+  return typeof value;
+}
+
+function normalizeObjectParams(
+  params: unknown,
+):
+  | { ok: true; value: Record<string, unknown> }
+  | { ok: false; error: ReturnType<typeof errorShape> } {
+  if (params === undefined || params === null) {
+    return {
+      ok: true,
+      value: {},
+    };
+  }
+  if (typeof params !== "object" || Array.isArray(params)) {
+    return {
+      ok: false,
+      error: errorShape(ErrorCodes.INVALID_REQUEST, "invalid params: expected object", {
+        details: {
+          expectedType: "object",
+          actualType: toParamValueType(params),
+        },
+      }),
+    };
+  }
+  return {
+    ok: true,
+    value: params as Record<string, unknown>,
+  };
+}
+
 export function resetDesktopControlSessionsForTests() {
   desktopControlSessions.clear();
 }
@@ -1108,7 +1146,12 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const typed = (params ?? {}) as DesktopControlCreateParams & Record<string, unknown>;
+    const normalizedParams = normalizeObjectParams(params);
+    if (!normalizedParams.ok) {
+      respond(false, undefined, normalizedParams.error);
+      return;
+    }
+    const typed = normalizedParams.value as DesktopControlCreateParams & Record<string, unknown>;
     const createValidationError = validateDesktopControlSessionCreateParams(typed);
     if (createValidationError) {
       respond(false, undefined, createValidationError);
@@ -1232,7 +1275,12 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const typed = params ?? {};
+    const normalizedParams = normalizeObjectParams(params);
+    if (!normalizedParams.ok) {
+      respond(false, undefined, normalizedParams.error);
+      return;
+    }
+    const typed = normalizedParams.value;
     const includeAuditRaw = typed.includeAudit;
     if (includeAuditRaw !== undefined && typeof includeAuditRaw !== "boolean") {
       respond(
@@ -1496,7 +1544,12 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const typed = (params ?? {}) as DesktopControlGetParams & Record<string, unknown>;
+    const normalizedParams = normalizeObjectParams(params);
+    if (!normalizedParams.ok) {
+      respond(false, undefined, normalizedParams.error);
+      return;
+    }
+    const typed = normalizedParams.value as DesktopControlGetParams & Record<string, unknown>;
     const includeAuditRaw = typed.includeAudit;
     if (includeAuditRaw !== undefined && typeof includeAuditRaw !== "boolean") {
       respond(
@@ -1531,7 +1584,12 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const typed = (params ?? {}) as DesktopControlDecisionParams & Record<string, unknown>;
+    const normalizedParams = normalizeObjectParams(params);
+    if (!normalizedParams.ok) {
+      respond(false, undefined, normalizedParams.error);
+      return;
+    }
+    const typed = normalizedParams.value as DesktopControlDecisionParams & Record<string, unknown>;
     const found = ensureDesktopSessionExists(typed.id);
     if (!found.ok) {
       respond(false, undefined, found.error);
@@ -1708,7 +1766,12 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const typed = (params ?? {}) as DesktopControlCloseParams & Record<string, unknown>;
+    const normalizedParams = normalizeObjectParams(params);
+    if (!normalizedParams.ok) {
+      respond(false, undefined, normalizedParams.error);
+      return;
+    }
+    const typed = normalizedParams.value as DesktopControlCloseParams & Record<string, unknown>;
     const found = ensureDesktopSessionExists(typed.id);
     if (!found.ok) {
       respond(false, undefined, found.error);
@@ -1802,7 +1865,12 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const typed = (params ?? {}) as DesktopControlRequestParams & Record<string, unknown>;
+    const normalizedParams = normalizeObjectParams(params);
+    if (!normalizedParams.ok) {
+      respond(false, undefined, normalizedParams.error);
+      return;
+    }
+    const typed = normalizedParams.value as DesktopControlRequestParams & Record<string, unknown>;
     const found = ensureDesktopSessionExists(typed.id);
     if (!found.ok) {
       respond(false, undefined, found.error);
