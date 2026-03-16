@@ -1274,6 +1274,76 @@ describe("desktop control session handlers", () => {
     );
   });
 
+  it("applies normalized nodeId filters when listing sessions", async () => {
+    const nodeA = createNode({
+      nodeId: "DeskTop-Route-X_01",
+      displayName: "Desktop Route X 01",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+    const nodeB = createNode({
+      nodeId: "desktop-route-y-02",
+      displayName: "Desktop Route Y 02",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+
+    const nodeSessionA = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "nodeId normalized filter target",
+        nodeId: "DeskTop-Route-X_01",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [nodeA, nodeB],
+    });
+    const nodeSessionAPayload = nodeSessionA.response.payload as { id: string };
+
+    const nodeSessionB = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "nodeId normalized filter control",
+        nodeId: "desktop-route-y-02",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [nodeA, nodeB],
+    });
+    const nodeSessionBPayload = nodeSessionB.response.payload as { id: string };
+
+    const listed = await invokeHandler({
+      method: "desktop.control.session.list",
+      params: {
+        nodeId: "  desktop route x 01  ",
+      },
+      scopes: ["operator.read"],
+    });
+
+    expect(listed.response.ok).toBe(true);
+    const payload = listed.response.payload as {
+      sessions: Array<{ id: string; route: { kind: string; node: { nodeId: string } | null } }>;
+    };
+    expect(payload.sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: nodeSessionAPayload.id,
+          route: expect.objectContaining({
+            kind: "node",
+            node: expect.objectContaining({
+              nodeId: "DeskTop-Route-X_01",
+            }),
+          }),
+        }),
+      ]),
+    );
+    expect(payload.sessions).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: nodeSessionBPayload.id,
+        }),
+      ]),
+    );
+  });
+
   it("filters listed sessions by risk level", async () => {
     const standard = await invokeHandler({
       method: "desktop.control.session.create",

@@ -1133,8 +1133,9 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const nodeIdRaw = typeof typed.nodeId === "string" ? typed.nodeId.trim() : "";
-    if (routeRaw === "local" && nodeIdRaw) {
+    const nodeIdRawInput = typeof typed.nodeId === "string" ? typed.nodeId.trim() : "";
+    const nodeIdFilterKey = nodeIdRawInput ? normalizeNodeKey(nodeIdRawInput) : "";
+    if (routeRaw === "local" && nodeIdRawInput) {
       respond(
         false,
         undefined,
@@ -1191,7 +1192,7 @@ export const browserHandlers: GatewayRequestHandlers = {
     const decision = decisionRaw || undefined;
     const route = routeRaw || undefined;
     const riskLevel = riskLevelRaw || undefined;
-    const nodeId = nodeIdRaw || undefined;
+    const nodeId = nodeIdFilterKey || undefined;
     const limit = limitRaw;
     const offset = offsetRaw ?? 0;
     const filtered = Array.from(desktopControlSessions.values())
@@ -1208,7 +1209,10 @@ export const browserHandlers: GatewayRequestHandlers = {
         if (riskLevel && entry.risk.level !== riskLevel) {
           return false;
         }
-        if (nodeId && (entry.route.kind !== "node" || entry.route.node.nodeId !== nodeId)) {
+        if (
+          nodeId &&
+          (entry.route.kind !== "node" || normalizeNodeKey(entry.route.node.nodeId) !== nodeId)
+        ) {
           return false;
         }
         return true;
