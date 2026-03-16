@@ -773,6 +773,7 @@ function normalizeBrowserRequest(
     if (
       typeof timeoutRaw !== "number" ||
       !Number.isFinite(timeoutRaw) ||
+      !Number.isInteger(timeoutRaw) ||
       timeoutRaw < BROWSER_REQUEST_MIN_TIMEOUT_MS ||
       timeoutRaw > BROWSER_REQUEST_MAX_TIMEOUT_MS
     ) {
@@ -780,7 +781,7 @@ function normalizeBrowserRequest(
         ok: false,
         error: errorShape(ErrorCodes.INVALID_REQUEST, `invalid timeoutMs: ${String(timeoutRaw)}`, {
           details: {
-            expectedType: "number",
+            expectedType: "integer",
             minTimeoutMs: BROWSER_REQUEST_MIN_TIMEOUT_MS,
             maxTimeoutMs: BROWSER_REQUEST_MAX_TIMEOUT_MS,
           },

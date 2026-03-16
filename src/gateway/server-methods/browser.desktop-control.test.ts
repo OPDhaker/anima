@@ -2284,7 +2284,7 @@ describe("desktop control session handlers", () => {
       invokeMock,
     });
 
-    for (const timeoutMs of ["1000", 0, 999_999] as const) {
+    for (const timeoutMs of ["1000", 0, 999_999, 10.5] as const) {
       const requested = await invokeHandler({
         method: "desktop.control.session.request",
         params: {
@@ -2302,7 +2302,7 @@ describe("desktop control session handlers", () => {
       expect(requested.response.error?.message).toContain("invalid timeoutMs");
       expect(requested.response.error?.details).toEqual(
         expect.objectContaining({
-          expectedType: "number",
+          expectedType: "integer",
           minTimeoutMs: 1,
           maxTimeoutMs: 120000,
         }),
