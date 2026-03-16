@@ -2269,6 +2269,18 @@ describe("desktop control session handlers", () => {
       invokeMock,
     });
     expect(first.response.ok).toBe(true);
+    expect(first.broadcast).toHaveBeenCalledWith(
+      "desktop.control.session.updated",
+      expect.objectContaining({
+        action: "closed",
+        actor: "system",
+        details: expect.objectContaining({
+          reason: "max requests reached",
+        }),
+        session: expect.objectContaining({ id: createdPayload.id, state: "closed" }),
+      }),
+      expect.objectContaining({ dropIfSlow: true }),
+    );
 
     const second = await invokeHandler({
       method: "desktop.control.session.request",
@@ -2292,18 +2304,7 @@ describe("desktop control session handlers", () => {
         expiresAtMs: expect.any(Number),
       }),
     );
-    expect(second.broadcast).toHaveBeenCalledWith(
-      "desktop.control.session.updated",
-      expect.objectContaining({
-        action: "closed",
-        actor: "system",
-        details: expect.objectContaining({
-          reason: "max requests reached",
-        }),
-        session: expect.objectContaining({ id: createdPayload.id, state: "closed" }),
-      }),
-      expect.objectContaining({ dropIfSlow: true }),
-    );
+    expect(second.broadcast).not.toHaveBeenCalled();
 
     const after = await invokeHandler({
       method: "desktop.control.session.get",

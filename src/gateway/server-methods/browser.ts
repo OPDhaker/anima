@@ -1625,6 +1625,30 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
+    if (
+      session.state === "closed" &&
+      session.approval.decision === "allow" &&
+      session.requestCount >= session.controls.maxRequests
+    ) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `session request budget exhausted (${session.controls.maxRequests})`,
+          {
+            details: {
+              state: session.state,
+              decision: session.approval.decision,
+              requestCount: session.requestCount,
+              maxRequests: session.controls.maxRequests,
+              expiresAtMs: session.expiresAtMs,
+            },
+          },
+        ),
+      );
+      return;
+    }
     if (session.state !== "active" || session.approval.decision !== "allow") {
       respond(
         false,
@@ -1857,6 +1881,28 @@ export const browserHandlers: GatewayRequestHandlers = {
         status: result.status,
       },
     });
+    if (session.requestCount >= session.controls.maxRequests) {
+      session.state = "closed";
+      session.closedAtMs = session.lastRequestAtMs;
+      appendDesktopControlAudit(session, {
+        type: "session.closed",
+        actor: "system",
+        details: {
+          reason: "max requests reached",
+          maxRequests: session.controls.maxRequests,
+        },
+      });
+      broadcastDesktopControlSessionEvent({
+        context,
+        action: "closed",
+        session,
+        actor: "system",
+        details: {
+          reason: "max requests reached",
+          maxRequests: session.controls.maxRequests,
+        },
+      });
+    }
     respond(true, result.payload);
   },
 };
