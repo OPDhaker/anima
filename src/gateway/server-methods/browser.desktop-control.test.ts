@@ -373,6 +373,92 @@ describe("desktop control session handlers", () => {
     );
   });
 
+  it("keeps denied sessions denied when close is called", async () => {
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "deny state should remain terminal",
+      },
+      nodes: [],
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const denied = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "deny",
+        note: "Denied after checking operator policy requirements.",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [],
+    });
+    expect(denied.response.ok).toBe(true);
+
+    const closedAfterDeny = await invokeHandler({
+      method: "desktop.control.session.close",
+      params: {
+        id: createdPayload.id,
+        note: "Manual cleanup",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [],
+    });
+    expect(closedAfterDeny.response.ok).toBe(true);
+    expect(closedAfterDeny.response.payload).toEqual(
+      expect.objectContaining({
+        state: "denied",
+        approval: expect.objectContaining({
+          decision: "deny",
+        }),
+      }),
+    );
+    expect(closedAfterDeny.broadcast).not.toHaveBeenCalled();
+  });
+
+  it("keeps expired sessions expired when close is called", async () => {
+    const now = new Date("2026-03-16T00:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    try {
+      const created = await invokeHandler({
+        method: "desktop.control.session.create",
+        params: {
+          reason: "expiry should remain terminal",
+          ttlMs: 60_000,
+        },
+        nodes: [],
+      });
+      const createdPayload = created.response.payload as { id: string };
+
+      vi.setSystemTime(new Date(now.getTime() + 60_001));
+
+      const closedAfterExpiry = await invokeHandler({
+        method: "desktop.control.session.close",
+        params: {
+          id: createdPayload.id,
+          note: "Manual cleanup",
+        },
+        scopes: ["operator.write", "operator.read"],
+        nodes: [],
+      });
+      expect(closedAfterExpiry.response.ok).toBe(true);
+      expect(closedAfterExpiry.response.payload).toEqual(
+        expect.objectContaining({
+          state: "expired",
+        }),
+      );
+      const actions = closedAfterExpiry.broadcast.mock.calls.map(
+        (entry) => (entry[1] as { action?: string }).action,
+      );
+      expect(actions).toContain("expired");
+      expect(actions).not.toContain("closed");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("routes approved requests through the pinned browser node", async () => {
     const browserNode = createNode({
       nodeId: "desktop-1",

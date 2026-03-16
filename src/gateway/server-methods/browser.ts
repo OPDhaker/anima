@@ -1208,7 +1208,7 @@ export const browserHandlers: GatewayRequestHandlers = {
       return;
     }
     const session = found.session;
-    if (session.state === "closed") {
+    if (session.state === "closed" || session.state === "denied" || session.state === "expired") {
       respond(true, toDesktopControlSessionSnapshot(session, true));
       return;
     }
