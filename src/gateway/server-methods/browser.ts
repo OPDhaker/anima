@@ -221,6 +221,7 @@ const DESKTOP_CONTROL_MAX_REASON_LEN = 240;
 const DESKTOP_CONTROL_AUDIT_MAX_EVENTS = 200;
 const DESKTOP_CONTROL_RETENTION_MS = 2 * 60 * 60 * 1000;
 const DESKTOP_CONTROL_DEFAULT_ALLOWED_METHODS: DesktopControlSessionMethod[] = ["GET"];
+const DESKTOP_CONTROL_ALLOWED_METHODS: DesktopControlSessionMethod[] = ["GET", "POST", "DELETE"];
 const DESKTOP_CONTROL_DEFAULT_MAX_REQUESTS = 40;
 const DESKTOP_CONTROL_MIN_MAX_REQUESTS = 1;
 const DESKTOP_CONTROL_MAX_MAX_REQUESTS = 500;
@@ -459,6 +460,14 @@ function isDesktopControlSessionRiskLevel(value: unknown): value is DesktopContr
   );
 }
 
+function parseDesktopSessionMethod(value: string): DesktopControlSessionMethod | null {
+  const method = value.trim().toUpperCase();
+  if (DESKTOP_CONTROL_ALLOWED_METHODS.includes(method as DesktopControlSessionMethod)) {
+    return method;
+  }
+  return null;
+}
+
 function normalizeDesktopSessionAllowMethods(input: unknown): DesktopControlSessionMethod[] {
   if (!Array.isArray(input)) {
     return [...DESKTOP_CONTROL_DEFAULT_ALLOWED_METHODS];
@@ -468,11 +477,8 @@ function normalizeDesktopSessionAllowMethods(input: unknown): DesktopControlSess
     if (typeof entry !== "string") {
       continue;
     }
-    const method = entry.trim().toUpperCase();
-    if (
-      (method === "GET" || method === "POST" || method === "DELETE") &&
-      !normalized.includes(method)
-    ) {
+    const method = parseDesktopSessionMethod(entry);
+    if (method && !normalized.includes(method)) {
       normalized.push(method);
     }
   }
@@ -509,6 +515,122 @@ function resolveDesktopSessionRisk(
     level: reasons.length > 0 ? "elevated" : "standard",
     reasons,
   };
+}
+
+function validateDesktopControlSessionCreateParams(
+  params: DesktopControlCreateParams & Record<string, unknown>,
+): ReturnType<typeof errorShape> | null {
+  if (params.reason !== undefined && typeof params.reason !== "string") {
+    return errorShape(ErrorCodes.INVALID_REQUEST, `invalid reason: ${String(params.reason)}`, {
+      details: {
+        expectedType: "string",
+      },
+    });
+  }
+
+  if (params.ttlMs !== undefined) {
+    if (
+      typeof params.ttlMs !== "number" ||
+      !Number.isFinite(params.ttlMs) ||
+      !Number.isInteger(params.ttlMs) ||
+      params.ttlMs < DESKTOP_CONTROL_MIN_TTL_MS ||
+      params.ttlMs > DESKTOP_CONTROL_MAX_TTL_MS
+    ) {
+      return errorShape(ErrorCodes.INVALID_REQUEST, `invalid ttlMs: ${String(params.ttlMs)}`, {
+        details: {
+          minTtlMs: DESKTOP_CONTROL_MIN_TTL_MS,
+          maxTtlMs: DESKTOP_CONTROL_MAX_TTL_MS,
+        },
+      });
+    }
+  }
+
+  if (params.nodeId !== undefined && typeof params.nodeId !== "string") {
+    return errorShape(ErrorCodes.INVALID_REQUEST, `invalid nodeId: ${String(params.nodeId)}`, {
+      details: {
+        expectedType: "string",
+      },
+    });
+  }
+  if (typeof params.nodeId === "string" && !params.nodeId.trim()) {
+    return errorShape(ErrorCodes.INVALID_REQUEST, "invalid nodeId: must not be empty");
+  }
+
+  if (params.allowMethods !== undefined) {
+    if (!Array.isArray(params.allowMethods)) {
+      return errorShape(
+        ErrorCodes.INVALID_REQUEST,
+        `invalid allowMethods: ${String(params.allowMethods)}`,
+        {
+          details: {
+            expectedType: "string[]",
+            allowedMethods: DESKTOP_CONTROL_ALLOWED_METHODS,
+          },
+        },
+      );
+    }
+    if (params.allowMethods.length === 0) {
+      return errorShape(
+        ErrorCodes.INVALID_REQUEST,
+        "allowMethods must include at least one method",
+        {
+          details: {
+            allowedMethods: DESKTOP_CONTROL_ALLOWED_METHODS,
+          },
+        },
+      );
+    }
+    for (let i = 0; i < params.allowMethods.length; i += 1) {
+      const entry = params.allowMethods[i];
+      if (typeof entry !== "string") {
+        return errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid allowMethods[${i}]: ${String(entry)}`,
+          {
+            details: {
+              expectedType: "string",
+              allowedMethods: DESKTOP_CONTROL_ALLOWED_METHODS,
+            },
+          },
+        );
+      }
+      const parsed = parseDesktopSessionMethod(entry);
+      if (!parsed) {
+        return errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid allowMethods[${i}]: ${entry.trim() || "<empty>"}`,
+          {
+            details: {
+              allowedMethods: DESKTOP_CONTROL_ALLOWED_METHODS,
+            },
+          },
+        );
+      }
+    }
+  }
+
+  if (params.maxRequests !== undefined) {
+    if (
+      typeof params.maxRequests !== "number" ||
+      !Number.isFinite(params.maxRequests) ||
+      !Number.isInteger(params.maxRequests) ||
+      params.maxRequests < DESKTOP_CONTROL_MIN_MAX_REQUESTS ||
+      params.maxRequests > DESKTOP_CONTROL_MAX_MAX_REQUESTS
+    ) {
+      return errorShape(
+        ErrorCodes.INVALID_REQUEST,
+        `invalid maxRequests: ${String(params.maxRequests)}`,
+        {
+          details: {
+            minMaxRequests: DESKTOP_CONTROL_MIN_MAX_REQUESTS,
+            maxMaxRequests: DESKTOP_CONTROL_MAX_MAX_REQUESTS,
+          },
+        },
+      );
+    }
+  }
+
+  return null;
 }
 
 function appendDesktopControlAudit(
@@ -956,7 +1078,12 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const typed = params as DesktopControlCreateParams;
+    const typed = (params ?? {}) as DesktopControlCreateParams & Record<string, unknown>;
+    const createValidationError = validateDesktopControlSessionCreateParams(typed);
+    if (createValidationError) {
+      respond(false, undefined, createValidationError);
+      return;
+    }
     const cfg = loadConfig();
     const connectedNodes = context.nodeRegistry.listConnected();
     const browserNodes = connectedNodes.filter((node) => isBrowserNode(node));

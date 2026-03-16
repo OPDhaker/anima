@@ -131,6 +131,75 @@ describe("desktop control session handlers", () => {
     expect(payload.risk.reasons).toEqual([]);
   });
 
+  it("rejects malformed allowMethods values when creating a desktop control session", async () => {
+    const invalidCreateParams: Array<{
+      params: Record<string, unknown>;
+      expectedMessage: string;
+    }> = [
+      {
+        params: {
+          reason: "allowMethods must be an array",
+          allowMethods: "GET",
+        },
+        expectedMessage: "invalid allowMethods",
+      },
+      {
+        params: {
+          reason: "allowMethods values must be strings",
+          allowMethods: [true],
+        },
+        expectedMessage: "invalid allowMethods[0]",
+      },
+      {
+        params: {
+          reason: "allowMethods values must be known methods",
+          allowMethods: ["PATCH"],
+        },
+        expectedMessage: "invalid allowMethods[0]: PATCH",
+      },
+      {
+        params: {
+          reason: "allowMethods must include at least one method",
+          allowMethods: [],
+        },
+        expectedMessage: "allowMethods must include at least one method",
+      },
+    ];
+
+    for (const invalid of invalidCreateParams) {
+      const created = await invokeHandler({
+        method: "desktop.control.session.create",
+        params: invalid.params,
+      });
+
+      expect(created.response.ok).toBe(false);
+      expect(created.response.error?.message).toContain(invalid.expectedMessage);
+    }
+  });
+
+  it("rejects invalid maxRequests values when creating a desktop control session", async () => {
+    const invalidMaxRequests = [0, 501, 1.5, "40"];
+
+    for (const maxRequests of invalidMaxRequests) {
+      const created = await invokeHandler({
+        method: "desktop.control.session.create",
+        params: {
+          reason: "maxRequests validation guardrail",
+          maxRequests,
+        },
+      });
+
+      expect(created.response.ok).toBe(false);
+      expect(created.response.error?.message).toContain("invalid maxRequests");
+      expect(created.response.error?.details).toEqual(
+        expect.objectContaining({
+          minMaxRequests: 1,
+          maxMaxRequests: 500,
+        }),
+      );
+    }
+  });
+
   it("requires approvals scope to resolve a pending session", async () => {
     const created = await invokeHandler({
       method: "desktop.control.session.create",
