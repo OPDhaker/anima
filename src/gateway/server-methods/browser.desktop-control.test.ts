@@ -383,6 +383,92 @@ describe("desktop control session handlers", () => {
 
     expect(requested.response.ok).toBe(false);
     expect(requested.response.error?.message).toContain("session is not approved");
+    expect(requested.response.error?.message).toContain("state: pending_approval");
+    expect(requested.response.error?.message).toContain("decision: pending");
+  });
+
+  it("rejects desktop requests once a session is denied", async () => {
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: { reason: "denied session request should stay blocked" },
+      nodes: [],
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const denied = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "deny",
+        note: "Denied after policy-based risk review.",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [],
+    });
+    expect(denied.response.ok).toBe(true);
+
+    const requested = await invokeHandler({
+      method: "desktop.control.session.request",
+      params: {
+        id: createdPayload.id,
+        method: "GET",
+        path: "/status",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [],
+    });
+
+    expect(requested.response.ok).toBe(false);
+    expect(requested.response.error?.message).toContain("session is not approved");
+    expect(requested.response.error?.message).toContain("state: denied");
+    expect(requested.response.error?.message).toContain("decision: deny");
+  });
+
+  it("rejects desktop requests once a session is closed", async () => {
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: { reason: "closed session request should stay blocked" },
+      nodes: [],
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const approved = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [],
+    });
+    expect(approved.response.ok).toBe(true);
+
+    const closed = await invokeHandler({
+      method: "desktop.control.session.close",
+      params: {
+        id: createdPayload.id,
+        note: "Closing this session after operator review completed.",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [],
+    });
+    expect(closed.response.ok).toBe(true);
+
+    const requested = await invokeHandler({
+      method: "desktop.control.session.request",
+      params: {
+        id: createdPayload.id,
+        method: "GET",
+        path: "/status",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [],
+    });
+
+    expect(requested.response.ok).toBe(false);
+    expect(requested.response.error?.message).toContain("session is not approved");
+    expect(requested.response.error?.message).toContain("state: closed");
+    expect(requested.response.error?.message).toContain("decision: allow");
   });
 
   it("requires read scope to list desktop control sessions", async () => {

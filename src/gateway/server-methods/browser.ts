@@ -1291,7 +1291,20 @@ export const browserHandlers: GatewayRequestHandlers = {
     }
     const session = found.session;
     if (session.state !== "active" || session.approval.decision !== "allow") {
-      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "session is not approved"));
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `session is not approved (state: ${session.state}, decision: ${session.approval.decision})`,
+          {
+            details: {
+              state: session.state,
+              decision: session.approval.decision,
+            },
+          },
+        ),
+      );
       return;
     }
     if (session.expiresAtMs <= Date.now()) {
