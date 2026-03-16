@@ -432,6 +432,143 @@ describe("desktop control session handlers", () => {
     expect(invokeMock).toHaveBeenCalledTimes(0);
   });
 
+  it("requires desktop control request paths to start with /", async () => {
+    const browserNode = createNode({
+      nodeId: "desktop-path",
+      displayName: "Desktop Path",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+    const invokeMock = vi.fn(async () => ({
+      ok: true,
+      payloadJSON: JSON.stringify({ result: { ok: true } }),
+    }));
+
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "path normalization guardrail",
+        nodeId: "desktop-path",
+      },
+      nodes: [browserNode],
+      invokeMock,
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+
+    const requested = await invokeHandler({
+      method: "desktop.control.session.request",
+      params: {
+        id: createdPayload.id,
+        method: "GET",
+        path: "status",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+
+    expect(requested.response.ok).toBe(false);
+    expect(requested.response.error?.message).toContain("path must start with /");
+    expect(invokeMock).toHaveBeenCalledTimes(0);
+  });
+
+  it("does not consume request budget when dispatch fails", async () => {
+    const browserNode = createNode({
+      nodeId: "desktop-budget",
+      displayName: "Desktop Budget",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+    const invokeMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        error: { message: "simulated invoke failure" },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        payloadJSON: JSON.stringify({ result: { ok: true } }),
+      });
+
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "failure should not spend request budget",
+        nodeId: "desktop-budget",
+        maxRequests: 1,
+      },
+      nodes: [browserNode],
+      invokeMock,
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+
+    const firstAttempt = await invokeHandler({
+      method: "desktop.control.session.request",
+      params: {
+        id: createdPayload.id,
+        method: "GET",
+        path: "/status",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+    expect(firstAttempt.response.ok).toBe(false);
+    expect(firstAttempt.response.error?.message).toContain("simulated invoke failure");
+
+    const afterFail = await invokeHandler({
+      method: "desktop.control.session.get",
+      params: { id: createdPayload.id },
+      scopes: ["operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+    expect(afterFail.response.ok).toBe(true);
+    expect(afterFail.response.payload).toEqual(
+      expect.objectContaining({
+        state: "active",
+        requestCount: 0,
+      }),
+    );
+
+    const secondAttempt = await invokeHandler({
+      method: "desktop.control.session.request",
+      params: {
+        id: createdPayload.id,
+        method: "GET",
+        path: "/status",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+    expect(secondAttempt.response.ok).toBe(true);
+    expect(secondAttempt.response.payload).toEqual({ ok: true });
+    expect(invokeMock).toHaveBeenCalledTimes(2);
+  });
+
   it("auto-closes a session when max request budget is exhausted", async () => {
     const browserNode = createNode({
       nodeId: "desktop-3",

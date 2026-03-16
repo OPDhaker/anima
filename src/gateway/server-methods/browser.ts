@@ -567,6 +567,12 @@ function normalizeBrowserRequest(
       error: errorShape(ErrorCodes.INVALID_REQUEST, "method must be GET, POST, or DELETE"),
     };
   }
+  if (!path.startsWith("/")) {
+    return {
+      ok: false,
+      error: errorShape(ErrorCodes.INVALID_REQUEST, "path must start with /"),
+    };
+  }
 
   return {
     ok: true,
@@ -1327,8 +1333,6 @@ export const browserHandlers: GatewayRequestHandlers = {
       context,
       nodeTarget,
     });
-    session.requestCount += 1;
-    session.lastRequestAtMs = Date.now();
     if (!result.ok) {
       appendDesktopControlAudit(session, {
         type: "request.error",
@@ -1355,6 +1359,8 @@ export const browserHandlers: GatewayRequestHandlers = {
       respond(false, undefined, result.error);
       return;
     }
+    session.requestCount += 1;
+    session.lastRequestAtMs = Date.now();
     appendDesktopControlAudit(session, {
       type: "request.ok",
       actor,
