@@ -471,6 +471,75 @@ describe("desktop control session handlers", () => {
     expect(requested.response.error?.message).toContain("decision: allow");
   });
 
+  it("returns an explicit expiry error when requesting an expired session", async () => {
+    const now = new Date("2026-03-16T00:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    try {
+      const created = await invokeHandler({
+        method: "desktop.control.session.create",
+        params: {
+          reason: "expired request should return explicit error",
+          ttlMs: 60_000,
+        },
+        nodes: [],
+      });
+      const createdPayload = created.response.payload as { id: string };
+
+      const approved = await invokeHandler({
+        method: "desktop.control.session.approve",
+        params: {
+          id: createdPayload.id,
+          decision: "allow",
+        },
+        scopes: ["operator.approvals", "operator.read"],
+        nodes: [],
+      });
+      expect(approved.response.ok).toBe(true);
+
+      vi.setSystemTime(new Date(now.getTime() + 60_001));
+
+      const requested = await invokeHandler({
+        method: "desktop.control.session.request",
+        params: {
+          id: createdPayload.id,
+          method: "GET",
+          path: "/status",
+        },
+        scopes: ["operator.write", "operator.read"],
+        nodes: [],
+      });
+      expect(requested.response.ok).toBe(false);
+      expect(requested.response.error?.message).toContain("session has expired");
+      expect(requested.response.error?.message).not.toContain("session is not approved");
+      expect(requested.broadcast).toHaveBeenCalledWith(
+        "desktop.control.session.updated",
+        expect.objectContaining({
+          action: "expired",
+          actor: "system",
+          session: expect.objectContaining({ id: createdPayload.id, state: "expired" }),
+        }),
+        expect.objectContaining({ dropIfSlow: true }),
+      );
+
+      const after = await invokeHandler({
+        method: "desktop.control.session.get",
+        params: { id: createdPayload.id },
+        scopes: ["operator.read"],
+        nodes: [],
+      });
+      expect(after.response.ok).toBe(true);
+      expect(after.response.payload).toEqual(
+        expect.objectContaining({
+          state: "expired",
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("requires read scope to list desktop control sessions", async () => {
     await invokeHandler({
       method: "desktop.control.session.create",

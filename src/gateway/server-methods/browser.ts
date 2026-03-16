@@ -1290,6 +1290,20 @@ export const browserHandlers: GatewayRequestHandlers = {
       return;
     }
     const session = found.session;
+    if (session.state === "expired") {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "session has expired", {
+          details: {
+            state: session.state,
+            decision: session.approval.decision,
+            expiresAtMs: session.expiresAtMs,
+          },
+        }),
+      );
+      return;
+    }
     if (session.state !== "active" || session.approval.decision !== "allow") {
       respond(
         false,
@@ -1320,7 +1334,17 @@ export const browserHandlers: GatewayRequestHandlers = {
         session,
         actor: "system",
       });
-      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "session has expired"));
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "session has expired", {
+          details: {
+            state: session.state,
+            decision: session.approval.decision,
+            expiresAtMs: session.expiresAtMs,
+          },
+        }),
+      );
       return;
     }
     const normalized = normalizeBrowserRequest(typed);
