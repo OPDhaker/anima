@@ -2250,6 +2250,68 @@ describe("desktop control session handlers", () => {
     expect(invokeMock).toHaveBeenCalledTimes(0);
   });
 
+  it("rejects invalid timeoutMs values for desktop control requests", async () => {
+    const browserNode = createNode({
+      nodeId: "desktop-timeout",
+      displayName: "Desktop Timeout",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+    const invokeMock = vi.fn(async () => ({
+      ok: true,
+      payloadJSON: JSON.stringify({ result: { ok: true } }),
+    }));
+
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "timeout guardrail",
+        nodeId: "desktop-timeout",
+      },
+      nodes: [browserNode],
+      invokeMock,
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+
+    for (const timeoutMs of ["1000", 0, 999_999] as const) {
+      const requested = await invokeHandler({
+        method: "desktop.control.session.request",
+        params: {
+          id: createdPayload.id,
+          method: "GET",
+          path: "/status",
+          timeoutMs,
+        },
+        scopes: ["operator.write", "operator.read"],
+        nodes: [browserNode],
+        invokeMock,
+      });
+
+      expect(requested.response.ok).toBe(false);
+      expect(requested.response.error?.message).toContain("invalid timeoutMs");
+      expect(requested.response.error?.details).toEqual(
+        expect.objectContaining({
+          expectedType: "number",
+          minTimeoutMs: 1,
+          maxTimeoutMs: 120000,
+        }),
+      );
+    }
+
+    expect(invokeMock).toHaveBeenCalledTimes(0);
+  });
+
   it("does not consume request budget when dispatch fails", async () => {
     const browserNode = createNode({
       nodeId: "desktop-budget",

@@ -231,6 +231,8 @@ const DESKTOP_CONTROL_LIST_MIN_LIMIT = 1;
 const DESKTOP_CONTROL_LIST_MAX_LIMIT = 500;
 const DESKTOP_CONTROL_LIST_MIN_OFFSET = 0;
 const DESKTOP_CONTROL_LIST_MAX_OFFSET = 10_000;
+const BROWSER_REQUEST_MIN_TIMEOUT_MS = 1;
+const BROWSER_REQUEST_MAX_TIMEOUT_MS = 120_000;
 const DESKTOP_CONTROL_SESSION_STATES: DesktopControlSessionState[] = [
   "pending_approval",
   "active",
@@ -747,10 +749,7 @@ function normalizeBrowserRequest(
   const path = typeof params.path === "string" ? params.path.trim() : "";
   const query = params.query && typeof params.query === "object" ? params.query : undefined;
   const body = params.body;
-  const timeoutMs =
-    typeof params.timeoutMs === "number" && Number.isFinite(params.timeoutMs)
-      ? Math.max(1, Math.floor(params.timeoutMs))
-      : undefined;
+  const timeoutRaw = params.timeoutMs;
 
   if (!methodRaw || !path) {
     return {
@@ -770,6 +769,26 @@ function normalizeBrowserRequest(
       error: errorShape(ErrorCodes.INVALID_REQUEST, "path must start with /"),
     };
   }
+  if (timeoutRaw !== undefined) {
+    if (
+      typeof timeoutRaw !== "number" ||
+      !Number.isFinite(timeoutRaw) ||
+      timeoutRaw < BROWSER_REQUEST_MIN_TIMEOUT_MS ||
+      timeoutRaw > BROWSER_REQUEST_MAX_TIMEOUT_MS
+    ) {
+      return {
+        ok: false,
+        error: errorShape(ErrorCodes.INVALID_REQUEST, `invalid timeoutMs: ${String(timeoutRaw)}`, {
+          details: {
+            expectedType: "number",
+            minTimeoutMs: BROWSER_REQUEST_MIN_TIMEOUT_MS,
+            maxTimeoutMs: BROWSER_REQUEST_MAX_TIMEOUT_MS,
+          },
+        }),
+      };
+    }
+  }
+  const timeoutMs = typeof timeoutRaw === "number" ? Math.floor(timeoutRaw) : undefined;
 
   return {
     ok: true,
