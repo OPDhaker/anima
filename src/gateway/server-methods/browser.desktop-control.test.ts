@@ -147,6 +147,159 @@ describe("desktop control session handlers", () => {
     expect(approve.response.error?.message).toContain("missing scope: operator.approvals");
   });
 
+  it("rejects approval when a session was already manually closed", async () => {
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: { reason: "close then approve should fail" },
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const closed = await invokeHandler({
+      method: "desktop.control.session.close",
+      params: {
+        id: createdPayload.id,
+        note: "Closing this request before approval due to context change.",
+      },
+      scopes: ["operator.write", "operator.read"],
+    });
+    expect(closed.response.ok).toBe(true);
+
+    const approveAfterClose = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+    });
+    expect(approveAfterClose.response.ok).toBe(false);
+    expect(approveAfterClose.response.error?.message).toContain(
+      "session is not pending approval (state: closed)",
+    );
+    expect(approveAfterClose.broadcast).not.toHaveBeenCalled();
+
+    const after = await invokeHandler({
+      method: "desktop.control.session.get",
+      params: { id: createdPayload.id },
+      scopes: ["operator.read"],
+    });
+    expect(after.response.ok).toBe(true);
+    expect(after.response.payload).toEqual(
+      expect.objectContaining({
+        state: "closed",
+        approval: expect.objectContaining({
+          decision: "deny",
+        }),
+      }),
+    );
+  });
+
+  it("rejects approval when the session is already denied", async () => {
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: { reason: "deny then approve should fail" },
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const denied = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "deny",
+        note: "Denied after policy review for this request.",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+    });
+    expect(denied.response.ok).toBe(true);
+
+    const approveAfterDeny = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+    });
+    expect(approveAfterDeny.response.ok).toBe(false);
+    expect(approveAfterDeny.response.error?.message).toContain(
+      "session is not pending approval (state: denied)",
+    );
+    expect(approveAfterDeny.broadcast).not.toHaveBeenCalled();
+
+    const after = await invokeHandler({
+      method: "desktop.control.session.get",
+      params: { id: createdPayload.id },
+      scopes: ["operator.read"],
+    });
+    expect(after.response.ok).toBe(true);
+    expect(after.response.payload).toEqual(
+      expect.objectContaining({
+        state: "denied",
+        approval: expect.objectContaining({
+          decision: "deny",
+        }),
+      }),
+    );
+  });
+
+  it("rejects approval when prune has already marked the session expired", async () => {
+    const now = new Date("2026-03-16T00:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    try {
+      const created = await invokeHandler({
+        method: "desktop.control.session.create",
+        params: {
+          reason: "expiry should block approval",
+          ttlMs: 60_000,
+        },
+        nodes: [],
+      });
+      const createdPayload = created.response.payload as { id: string };
+
+      vi.setSystemTime(new Date(now.getTime() + 60_001));
+
+      const approveAfterExpiry = await invokeHandler({
+        method: "desktop.control.session.approve",
+        params: {
+          id: createdPayload.id,
+          decision: "allow",
+        },
+        scopes: ["operator.approvals", "operator.read"],
+        nodes: [],
+      });
+      expect(approveAfterExpiry.response.ok).toBe(false);
+      expect(approveAfterExpiry.response.error?.message).toContain(
+        "session is not pending approval (state: expired)",
+      );
+      expect(approveAfterExpiry.broadcast).toHaveBeenCalledWith(
+        "desktop.control.session.updated",
+        expect.objectContaining({
+          action: "expired",
+          actor: "system",
+          session: expect.objectContaining({ id: createdPayload.id, state: "expired" }),
+        }),
+        expect.objectContaining({ dropIfSlow: true }),
+      );
+
+      const after = await invokeHandler({
+        method: "desktop.control.session.get",
+        params: { id: createdPayload.id },
+        scopes: ["operator.read"],
+        nodes: [],
+      });
+      expect(after.response.ok).toBe(true);
+      expect(after.response.payload).toEqual(
+        expect.objectContaining({
+          state: "expired",
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("blocks approval when the pinned browser node is disconnected", async () => {
     const browserNode = createNode({
       nodeId: "desktop-approval-route",
@@ -442,6 +595,30 @@ describe("desktop control session handlers", () => {
       }),
       expect.objectContaining({ dropIfSlow: true }),
     );
+  });
+
+  it("requires write scope to close a desktop control session", async () => {
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "close scope guardrail",
+      },
+      nodes: [],
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const closed = await invokeHandler({
+      method: "desktop.control.session.close",
+      params: {
+        id: createdPayload.id,
+        note: "Closing before approval due to operator context change.",
+      },
+      scopes: ["operator.read"],
+      nodes: [],
+    });
+
+    expect(closed.response.ok).toBe(false);
+    expect(closed.response.error?.message).toContain("missing scope: operator.write");
   });
 
   it("requires rationale and records a deny decision when closing a pending session", async () => {
