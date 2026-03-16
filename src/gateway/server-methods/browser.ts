@@ -1085,6 +1085,28 @@ export const browserHandlers: GatewayRequestHandlers = {
       );
       return;
     }
+    if (decisionRaw === "allow" && session.route.kind === "node") {
+      const nodeTarget = resolveDesktopSessionNodeTarget({
+        session,
+        nodes: context.nodeRegistry.listConnected(),
+      });
+      if (!nodeTarget) {
+        respond(
+          false,
+          undefined,
+          errorShape(
+            ErrorCodes.UNAVAILABLE,
+            `pinned browser node is not connected: ${session.route.node.nodeId}`,
+            {
+              details: {
+                nodeId: session.route.node.nodeId,
+              },
+            },
+          ),
+        );
+        return;
+      }
+    }
     const note = typeof typed.note === "string" && typed.note.trim() ? typed.note.trim() : null;
     if (decisionRaw === "allow" && session.risk.level === "elevated" && !note) {
       respond(

@@ -147,6 +147,71 @@ describe("desktop control session handlers", () => {
     expect(approve.response.error?.message).toContain("missing scope: operator.approvals");
   });
 
+  it("blocks approval when the pinned browser node is disconnected", async () => {
+    const browserNode = createNode({
+      nodeId: "desktop-approval-route",
+      displayName: "Desktop Approval Route",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "approval should require live pinned node",
+        nodeId: "desktop-approval-route",
+      },
+      nodes: [browserNode],
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const disconnectedApproval = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [],
+    });
+
+    expect(disconnectedApproval.response.ok).toBe(false);
+    expect(disconnectedApproval.response.error?.message).toContain(
+      "pinned browser node is not connected",
+    );
+
+    const pendingAfterFailure = await invokeHandler({
+      method: "desktop.control.session.get",
+      params: {
+        id: createdPayload.id,
+      },
+      scopes: ["operator.read"],
+      nodes: [],
+    });
+    expect(pendingAfterFailure.response.ok).toBe(true);
+    expect(pendingAfterFailure.response.payload).toEqual(
+      expect.objectContaining({
+        state: "pending_approval",
+      }),
+    );
+
+    const approvalAfterReconnect = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [browserNode],
+    });
+    expect(approvalAfterReconnect.response.ok).toBe(true);
+    expect(approvalAfterReconnect.response.payload).toEqual(
+      expect.objectContaining({
+        state: "active",
+      }),
+    );
+  });
+
   it("rejects desktop requests until a session is approved", async () => {
     const created = await invokeHandler({
       method: "desktop.control.session.create",
