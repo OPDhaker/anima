@@ -2222,7 +2222,11 @@ export const browserHandlers: GatewayRequestHandlers = {
         status: result.status,
       },
     });
-    if (session.requestCount >= session.controls.maxRequests) {
+    if (
+      session.state === "active" &&
+      session.approval.decision === "allow" &&
+      session.requestCount >= session.controls.maxRequests
+    ) {
       session.state = "closed";
       session.closedAtMs = session.lastRequestAtMs;
       appendDesktopControlAudit(session, {

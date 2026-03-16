@@ -2614,6 +2614,129 @@ describe("desktop control session handlers", () => {
     );
   });
 
+  it("preserves manual close state when an in-flight request completes", async () => {
+    const now = new Date("2026-03-16T00:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    try {
+      const browserNode = createNode({
+        nodeId: "desktop-manual-close-race",
+        displayName: "Desktop Manual Close Race",
+        caps: ["browser"],
+        commands: ["browser.proxy"],
+      });
+      let releaseFirstInvoke: ((value: { ok: boolean; payloadJSON: string }) => void) | null = null;
+      let markFirstInvokeStarted: (() => void) | null = null;
+      const firstInvokeStarted = new Promise<void>((resolve) => {
+        markFirstInvokeStarted = resolve;
+      });
+      const firstInvokeResult = new Promise<{ ok: boolean; payloadJSON: string }>((resolve) => {
+        releaseFirstInvoke = resolve;
+      });
+      const invokeMock = vi.fn().mockImplementationOnce(async () => {
+        markFirstInvokeStarted?.();
+        return firstInvokeResult;
+      });
+      const sharedBroadcast = vi.fn();
+
+      const created = await invokeHandler({
+        method: "desktop.control.session.create",
+        params: {
+          reason: "manual close while request in-flight",
+          nodeId: "desktop-manual-close-race",
+          maxRequests: 1,
+        },
+        nodes: [browserNode],
+        invokeMock,
+        broadcastMock: sharedBroadcast,
+      });
+      const createdPayload = created.response.payload as { id: string };
+
+      await invokeHandler({
+        method: "desktop.control.session.approve",
+        params: {
+          id: createdPayload.id,
+          decision: "allow",
+        },
+        scopes: ["operator.approvals", "operator.read"],
+        nodes: [browserNode],
+        invokeMock,
+        broadcastMock: sharedBroadcast,
+      });
+
+      const firstRequest = invokeHandler({
+        method: "desktop.control.session.request",
+        params: {
+          id: createdPayload.id,
+          method: "GET",
+          path: "/status",
+        },
+        scopes: ["operator.write", "operator.read"],
+        nodes: [browserNode],
+        invokeMock,
+        broadcastMock: sharedBroadcast,
+      });
+      await firstInvokeStarted;
+
+      vi.setSystemTime(new Date(now.getTime() + 1_000));
+      const closed = await invokeHandler({
+        method: "desktop.control.session.close",
+        params: {
+          id: createdPayload.id,
+          note: "manual close during request",
+        },
+        scopes: ["operator.write", "operator.read"],
+        nodes: [browserNode],
+        invokeMock,
+        broadcastMock: sharedBroadcast,
+      });
+      expect(closed.response.ok).toBe(true);
+      expect(closed.response.payload).toEqual(
+        expect.objectContaining({
+          state: "closed",
+          closedAtMs: now.getTime() + 1_000,
+          requestCount: 0,
+        }),
+      );
+
+      vi.setSystemTime(new Date(now.getTime() + 2_000));
+      expect(releaseFirstInvoke).not.toBeNull();
+      releaseFirstInvoke?.({
+        ok: true,
+        payloadJSON: JSON.stringify({ result: { ok: true } }),
+      });
+      const firstCompleted = await firstRequest;
+      expect(firstCompleted.response.ok).toBe(true);
+      expect(firstCompleted.response.payload).toEqual({ ok: true });
+
+      const after = await invokeHandler({
+        method: "desktop.control.session.get",
+        params: { id: createdPayload.id },
+        scopes: ["operator.read"],
+        nodes: [browserNode],
+        invokeMock,
+        broadcastMock: sharedBroadcast,
+      });
+      expect(after.response.ok).toBe(true);
+      expect(after.response.payload).toEqual(
+        expect.objectContaining({
+          state: "closed",
+          requestCount: 1,
+          closedAtMs: now.getTime() + 1_000,
+        }),
+      );
+
+      const systemClosedEvents = sharedBroadcast.mock.calls.filter(([, payload]) => {
+        const event = payload as { action?: string; actor?: string };
+        return event.action === "closed" && event.actor === "system";
+      });
+      expect(systemClosedEvents).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("auto-closes a session when max request budget is exhausted", async () => {
     const browserNode = createNode({
       nodeId: "desktop-3",
