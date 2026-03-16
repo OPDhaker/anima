@@ -373,6 +373,77 @@ describe("desktop control session handlers", () => {
     );
   });
 
+  it("requires a rationale note when manually closing an active session", async () => {
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "manual close rationale guardrail",
+      },
+      nodes: [],
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    const approved = await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [],
+    });
+    expect(approved.response.ok).toBe(true);
+
+    const missingNote = await invokeHandler({
+      method: "desktop.control.session.close",
+      params: {
+        id: createdPayload.id,
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [],
+    });
+    expect(missingNote.response.ok).toBe(false);
+    expect(missingNote.response.error?.message).toContain("at least");
+
+    const shortNote = await invokeHandler({
+      method: "desktop.control.session.close",
+      params: {
+        id: createdPayload.id,
+        note: "done",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [],
+    });
+    expect(shortNote.response.ok).toBe(false);
+    expect(shortNote.response.error?.message).toContain("at least");
+
+    const closed = await invokeHandler({
+      method: "desktop.control.session.close",
+      params: {
+        id: createdPayload.id,
+        note: "Closed after operator finished troubleshooting window.",
+      },
+      scopes: ["operator.write", "operator.read"],
+      nodes: [],
+    });
+    expect(closed.response.ok).toBe(true);
+    expect(closed.response.payload).toEqual(
+      expect.objectContaining({
+        state: "closed",
+      }),
+    );
+    expect(closed.broadcast).toHaveBeenCalledWith(
+      "desktop.control.session.updated",
+      expect.objectContaining({
+        action: "closed",
+        details: expect.objectContaining({
+          note: "Closed after operator finished troubleshooting window.",
+        }),
+      }),
+      expect.objectContaining({ dropIfSlow: true }),
+    );
+  });
+
   it("keeps denied sessions denied when close is called", async () => {
     const created = await invokeHandler({
       method: "desktop.control.session.create",

@@ -1212,10 +1212,26 @@ export const browserHandlers: GatewayRequestHandlers = {
       respond(true, toDesktopControlSessionSnapshot(session, true));
       return;
     }
+    const note = normalizeDesktopSessionNote(typed.note);
+    if (session.state === "active" && !hasDecisionRationale(note)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `note must be at least ${DESKTOP_CONTROL_MIN_DECISION_NOTE_LEN} characters when manually closing active desktop control sessions`,
+          {
+            details: {
+              minNoteLength: DESKTOP_CONTROL_MIN_DECISION_NOTE_LEN,
+            },
+          },
+        ),
+      );
+      return;
+    }
     const now = Date.now();
     session.state = "closed";
     session.closedAtMs = now;
-    const note = normalizeDesktopSessionNote(typed.note);
     appendDesktopControlAudit(session, {
       type: "session.closed",
       actor: resolveClientActor(client),
