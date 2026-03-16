@@ -953,6 +953,16 @@ function ensureDesktopSessionExists(
 ):
   | { ok: true; session: DesktopControlSessionRecord }
   | { ok: false; error: ReturnType<typeof errorShape> } {
+  if (idRaw !== undefined && typeof idRaw !== "string") {
+    return {
+      ok: false,
+      error: errorShape(ErrorCodes.INVALID_REQUEST, `invalid id: ${String(idRaw)}`, {
+        details: {
+          expectedType: "string",
+        },
+      }),
+    };
+  }
   const id = typeof idRaw === "string" ? idRaw.trim() : "";
   if (!id) {
     return {

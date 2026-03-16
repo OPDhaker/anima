@@ -240,6 +240,30 @@ describe("desktop control session handlers", () => {
     }
   });
 
+  it("rejects non-string id payloads for get/approve/close/request", async () => {
+    const methods = [
+      "desktop.control.session.get",
+      "desktop.control.session.approve",
+      "desktop.control.session.close",
+      "desktop.control.session.request",
+    ] as const;
+
+    for (const method of methods) {
+      const result = await invokeHandler({
+        method,
+        params: { id: 42 },
+      });
+
+      expect(result.response.ok).toBe(false);
+      expect(result.response.error?.message).toContain("invalid id: 42");
+      expect(result.response.error?.details).toEqual(
+        expect.objectContaining({
+          expectedType: "string",
+        }),
+      );
+    }
+  });
+
   it("rejects approval when a session was already manually closed", async () => {
     const created = await invokeHandler({
       method: "desktop.control.session.create",
