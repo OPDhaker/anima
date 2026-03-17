@@ -781,31 +781,41 @@ function normalizeBrowserRequest(
         }),
       };
     }
-  }
-  if (body !== undefined) {
-    if (typeof body === "function" || typeof body === "symbol" || typeof body === "bigint") {
+    const queryIssue = findFirstJsonSerializationIssue(queryRaw, "query");
+    if (queryIssue) {
       return {
         ok: false,
-        error: errorShape(ErrorCodes.INVALID_REQUEST, `invalid body: ${String(body)}`, {
-          details: {
-            expectedType: "json-serializable",
-            actualType: toParamValueType(body),
-          },
-        }),
-      };
-    }
-    if (body !== null && typeof body === "object") {
-      if (!Array.isArray(body) && !isPlainObjectRecord(body)) {
-        return {
-          ok: false,
-          error: errorShape(ErrorCodes.INVALID_REQUEST, `invalid body: ${String(body)}`, {
+        error: errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid query: non-json-serializable value at ${queryIssue.path}`,
+          {
             details: {
               expectedType: "json-serializable",
-              actualType: toParamValueType(body),
+              actualType: queryIssue.actualType,
+              path: queryIssue.path,
             },
-          }),
-        };
-      }
+          },
+        ),
+      };
+    }
+  }
+  if (body !== undefined) {
+    const bodyIssue = findFirstJsonSerializationIssue(body, "body");
+    if (bodyIssue) {
+      return {
+        ok: false,
+        error: errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid body: non-json-serializable value at ${bodyIssue.path}`,
+          {
+            details: {
+              expectedType: "json-serializable",
+              actualType: bodyIssue.actualType,
+              path: bodyIssue.path,
+            },
+          },
+        ),
+      };
     }
   }
   if (timeoutRaw !== undefined) {
@@ -1036,6 +1046,95 @@ function isPlainObjectRecord(value: unknown): value is Record<string, unknown> {
   }
   const proto = Object.getPrototypeOf(value);
   return proto === Object.prototype || proto === null;
+}
+
+type JsonSerializationIssue = {
+  path: string;
+  actualType: string;
+};
+
+function appendJsonPath(basePath: string, segment: string): string {
+  if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(segment)) {
+    return `${basePath}.${segment}`;
+  }
+  return `${basePath}[${JSON.stringify(segment)}]`;
+}
+
+function findFirstJsonSerializationIssue(
+  value: unknown,
+  path: string,
+  seen = new Set<object>(),
+): JsonSerializationIssue | null {
+  if (value === null) {
+    return null;
+  }
+
+  const valueType = typeof value;
+  if (valueType === "string" || valueType === "number" || valueType === "boolean") {
+    return null;
+  }
+  if (
+    valueType === "undefined" ||
+    valueType === "function" ||
+    valueType === "symbol" ||
+    valueType === "bigint"
+  ) {
+    return {
+      path,
+      actualType: valueType,
+    };
+  }
+
+  if (Array.isArray(value)) {
+    if (seen.has(value)) {
+      return {
+        path,
+        actualType: "circular",
+      };
+    }
+    seen.add(value);
+    for (let i = 0; i < value.length; i += 1) {
+      const nestedIssue = findFirstJsonSerializationIssue(value[i], `${path}[${i}]`, seen);
+      if (nestedIssue) {
+        seen.delete(value);
+        return nestedIssue;
+      }
+    }
+    seen.delete(value);
+    return null;
+  }
+
+  if (!value || typeof value !== "object") {
+    return {
+      path,
+      actualType: valueType,
+    };
+  }
+  if (!isPlainObjectRecord(value)) {
+    return {
+      path,
+      actualType: toParamValueType(value),
+    };
+  }
+
+  if (seen.has(value)) {
+    return {
+      path,
+      actualType: "circular",
+    };
+  }
+  seen.add(value);
+
+  for (const [key, entry] of Object.entries(value)) {
+    const nestedIssue = findFirstJsonSerializationIssue(entry, appendJsonPath(path, key), seen);
+    if (nestedIssue) {
+      seen.delete(value);
+      return nestedIssue;
+    }
+  }
+
+  seen.delete(value);
+  return null;
 }
 
 function normalizeObjectParams(

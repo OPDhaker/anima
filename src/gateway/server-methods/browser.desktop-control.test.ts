@@ -2489,6 +2489,97 @@ describe("desktop control session handlers", () => {
     expect(invokeMock).toHaveBeenCalledTimes(0);
   });
 
+  it("rejects nested non-json-serializable query payload values for desktop control requests", async () => {
+    const browserNode = createNode({
+      nodeId: "desktop-query-nested",
+      displayName: "Desktop Query Nested",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+    const invokeMock = vi.fn(async () => ({
+      ok: true,
+      payloadJSON: JSON.stringify({ result: { ok: true } }),
+    }));
+
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "query nested payload guardrail",
+        nodeId: "desktop-query-nested",
+      },
+      nodes: [browserNode],
+      invokeMock,
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+
+    const circularQuery: Record<string, unknown> = {};
+    circularQuery.self = circularQuery;
+
+    const invalidQueryCases: Array<{ query: unknown; expectedPath: string; expectedType: string }> =
+      [
+        {
+          query: {
+            filter: {
+              since: new Date("2026-03-17T00:00:00.000Z"),
+            },
+          },
+          expectedPath: "query.filter.since",
+          expectedType: "object",
+        },
+        {
+          query: {
+            tags: ["ok", () => "bad"],
+          },
+          expectedPath: "query.tags[1]",
+          expectedType: "function",
+        },
+        {
+          query: circularQuery,
+          expectedPath: "query.self",
+          expectedType: "circular",
+        },
+      ];
+
+    for (const invalid of invalidQueryCases) {
+      const requested = await invokeHandler({
+        method: "desktop.control.session.request",
+        params: {
+          id: createdPayload.id,
+          method: "GET",
+          path: "/status",
+          query: invalid.query,
+        },
+        scopes: ["operator.write", "operator.read"],
+        nodes: [browserNode],
+        invokeMock,
+      });
+
+      expect(requested.response.ok).toBe(false);
+      expect(requested.response.error?.message).toContain("invalid query");
+      expect(requested.response.error?.message).toContain(invalid.expectedPath);
+      expect(requested.response.error?.details).toEqual(
+        expect.objectContaining({
+          expectedType: "json-serializable",
+          actualType: invalid.expectedType,
+          path: invalid.expectedPath,
+        }),
+      );
+    }
+
+    expect(invokeMock).toHaveBeenCalledTimes(0);
+  });
+
   it("rejects non-json-serializable body payloads for desktop control requests", async () => {
     const browserNode = createNode({
       nodeId: "desktop-body",
@@ -2549,6 +2640,98 @@ describe("desktop control session handlers", () => {
       expect(requested.response.error?.details).toEqual(
         expect.objectContaining({
           expectedType: "json-serializable",
+        }),
+      );
+    }
+
+    expect(invokeMock).toHaveBeenCalledTimes(0);
+  });
+
+  it("rejects nested and circular non-json-serializable body payload values for desktop control requests", async () => {
+    const browserNode = createNode({
+      nodeId: "desktop-body-nested",
+      displayName: "Desktop Body Nested",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+    const invokeMock = vi.fn(async () => ({
+      ok: true,
+      payloadJSON: JSON.stringify({ result: { ok: true } }),
+    }));
+
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "body nested payload guardrail",
+        nodeId: "desktop-body-nested",
+      },
+      nodes: [browserNode],
+      invokeMock,
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+
+    const circularBody: Record<string, unknown> = {
+      message: "cycle",
+    };
+    circularBody.self = circularBody;
+
+    const invalidBodyCases: Array<{ body: unknown; expectedPath: string; expectedType: string }> = [
+      {
+        body: {
+          metadata: {
+            createdAt: new Date("2026-03-17T00:00:00.000Z"),
+          },
+        },
+        expectedPath: "body.metadata.createdAt",
+        expectedType: "object",
+      },
+      {
+        body: {
+          steps: ["ok", { handler: () => "bad" }],
+        },
+        expectedPath: "body.steps[1].handler",
+        expectedType: "function",
+      },
+      {
+        body: circularBody,
+        expectedPath: "body.self",
+        expectedType: "circular",
+      },
+    ];
+
+    for (const invalid of invalidBodyCases) {
+      const requested = await invokeHandler({
+        method: "desktop.control.session.request",
+        params: {
+          id: createdPayload.id,
+          method: "POST",
+          path: "/status",
+          body: invalid.body,
+        },
+        scopes: ["operator.write", "operator.read"],
+        nodes: [browserNode],
+        invokeMock,
+      });
+
+      expect(requested.response.ok).toBe(false);
+      expect(requested.response.error?.message).toContain("invalid body");
+      expect(requested.response.error?.message).toContain(invalid.expectedPath);
+      expect(requested.response.error?.details).toEqual(
+        expect.objectContaining({
+          expectedType: "json-serializable",
+          actualType: invalid.expectedType,
+          path: invalid.expectedPath,
         }),
       );
     }
