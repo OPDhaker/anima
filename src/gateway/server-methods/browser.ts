@@ -771,7 +771,7 @@ function normalizeBrowserRequest(
     };
   }
   if (queryRaw !== undefined) {
-    if (!queryRaw || typeof queryRaw !== "object" || Array.isArray(queryRaw)) {
+    if (!isPlainObjectRecord(queryRaw)) {
       return {
         ok: false,
         error: errorShape(ErrorCodes.INVALID_REQUEST, `invalid query: ${String(queryRaw)}`, {
@@ -1004,6 +1004,14 @@ function toParamValueType(value: unknown): string {
   return typeof value;
 }
 
+function isPlainObjectRecord(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
 function normalizeObjectParams(
   params: unknown,
 ):
@@ -1015,7 +1023,7 @@ function normalizeObjectParams(
       value: {},
     };
   }
-  if (typeof params !== "object" || Array.isArray(params)) {
+  if (!isPlainObjectRecord(params)) {
     return {
       ok: false,
       error: errorShape(ErrorCodes.INVALID_REQUEST, "invalid params: expected object", {
@@ -1028,7 +1036,7 @@ function normalizeObjectParams(
   }
   return {
     ok: true,
-    value: params as Record<string, unknown>,
+    value: params,
   };
 }
 

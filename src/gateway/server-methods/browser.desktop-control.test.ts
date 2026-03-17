@@ -254,6 +254,8 @@ describe("desktop control session handlers", () => {
       { params: 42, actualType: "number" },
       { params: true, actualType: "boolean" },
       { params: [], actualType: "array" },
+      { params: new Date("2026-03-17T00:00:00.000Z"), actualType: "object" },
+      { params: new Map([["id", "session-1"]]), actualType: "object" },
     ];
 
     for (const method of methods) {
@@ -2454,7 +2456,14 @@ describe("desktop control session handlers", () => {
       invokeMock,
     });
 
-    for (const query of ["status=1", ["status"]] as const) {
+    const invalidQueryCases: unknown[] = [
+      "status=1",
+      ["status"],
+      new Date("2026-03-17T00:00:00.000Z"),
+      new Map([["status", "1"]]),
+    ];
+
+    for (const query of invalidQueryCases) {
       const requested = await invokeHandler({
         method: "desktop.control.session.request",
         params: {
