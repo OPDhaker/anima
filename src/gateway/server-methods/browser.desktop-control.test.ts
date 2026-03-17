@@ -2489,6 +2489,73 @@ describe("desktop control session handlers", () => {
     expect(invokeMock).toHaveBeenCalledTimes(0);
   });
 
+  it("rejects non-json-serializable body payloads for desktop control requests", async () => {
+    const browserNode = createNode({
+      nodeId: "desktop-body",
+      displayName: "Desktop Body",
+      caps: ["browser"],
+      commands: ["browser.proxy"],
+    });
+    const invokeMock = vi.fn(async () => ({
+      ok: true,
+      payloadJSON: JSON.stringify({ result: { ok: true } }),
+    }));
+
+    const created = await invokeHandler({
+      method: "desktop.control.session.create",
+      params: {
+        reason: "body payload guardrail",
+        nodeId: "desktop-body",
+      },
+      nodes: [browserNode],
+      invokeMock,
+    });
+    const createdPayload = created.response.payload as { id: string };
+
+    await invokeHandler({
+      method: "desktop.control.session.approve",
+      params: {
+        id: createdPayload.id,
+        decision: "allow",
+      },
+      scopes: ["operator.approvals", "operator.read"],
+      nodes: [browserNode],
+      invokeMock,
+    });
+
+    const invalidBodyCases: unknown[] = [
+      new Date("2026-03-17T00:00:00.000Z"),
+      new Map([["status", "1"]]),
+      new Set(["status"]),
+      () => "status",
+    ];
+
+    for (const body of invalidBodyCases) {
+      const requested = await invokeHandler({
+        method: "desktop.control.session.request",
+        params: {
+          id: createdPayload.id,
+          method: "POST",
+          path: "/status",
+          body,
+        },
+        scopes: ["operator.write", "operator.read"],
+        nodes: [browserNode],
+        invokeMock,
+      });
+
+      expect(requested.response.ok).toBe(false);
+      expect(requested.response.error?.message).toContain("invalid body");
+      expect(requested.response.error?.details).toEqual(
+        expect.objectContaining({
+          expectedType: "json-serializable",
+        }),
+      );
+    }
+
+    expect(invokeMock).toHaveBeenCalledTimes(0);
+  });
+
   it("does not consume request budget when dispatch fails", async () => {
     const browserNode = createNode({
       nodeId: "desktop-budget",

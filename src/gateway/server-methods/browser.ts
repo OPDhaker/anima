@@ -782,6 +782,32 @@ function normalizeBrowserRequest(
       };
     }
   }
+  if (body !== undefined) {
+    if (typeof body === "function" || typeof body === "symbol" || typeof body === "bigint") {
+      return {
+        ok: false,
+        error: errorShape(ErrorCodes.INVALID_REQUEST, `invalid body: ${String(body)}`, {
+          details: {
+            expectedType: "json-serializable",
+            actualType: toParamValueType(body),
+          },
+        }),
+      };
+    }
+    if (body !== null && typeof body === "object") {
+      if (!Array.isArray(body) && !isPlainObjectRecord(body)) {
+        return {
+          ok: false,
+          error: errorShape(ErrorCodes.INVALID_REQUEST, `invalid body: ${String(body)}`, {
+            details: {
+              expectedType: "json-serializable",
+              actualType: toParamValueType(body),
+            },
+          }),
+        };
+      }
+    }
+  }
   if (timeoutRaw !== undefined) {
     if (
       typeof timeoutRaw !== "number" ||
