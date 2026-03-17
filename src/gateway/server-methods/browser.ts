@@ -1070,7 +1070,16 @@ function findFirstJsonSerializationIssue(
   }
 
   const valueType = typeof value;
-  if (valueType === "string" || valueType === "number" || valueType === "boolean") {
+  if (valueType === "number") {
+    if (!Number.isFinite(value)) {
+      return {
+        path,
+        actualType: "number(non-finite)",
+      };
+    }
+    return null;
+  }
+  if (valueType === "string" || valueType === "boolean") {
     return null;
   }
   if (

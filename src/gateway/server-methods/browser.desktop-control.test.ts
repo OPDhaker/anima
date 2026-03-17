@@ -2545,6 +2545,15 @@ describe("desktop control session handlers", () => {
           expectedType: "function",
         },
         {
+          query: {
+            metrics: {
+              ratio: Number.NaN,
+            },
+          },
+          expectedPath: "query.metrics.ratio",
+          expectedType: "number(non-finite)",
+        },
+        {
           query: circularQuery,
           expectedPath: "query.self",
           expectedType: "circular",
@@ -2702,6 +2711,15 @@ describe("desktop control session handlers", () => {
         },
         expectedPath: "body.steps[1].handler",
         expectedType: "function",
+      },
+      {
+        body: {
+          metrics: {
+            ratio: Number.POSITIVE_INFINITY,
+          },
+        },
+        expectedPath: "body.metrics.ratio",
+        expectedType: "number(non-finite)",
       },
       {
         body: circularBody,
