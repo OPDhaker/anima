@@ -111,6 +111,14 @@ export type AgentDefaultsConfig = {
   model?: AgentModelListConfig;
   /** Optional image-capable model and fallbacks (provider/model). */
   imageModel?: AgentModelListConfig;
+  /**
+   * Lightweight model for real-time conversational channels (chat, voice, DMs).
+   * When set, incoming messages from conversational surfaces (e.g., NoxSoft chat,
+   * Telegram) use this model instead of the primary model. Execution tasks
+   * (heartbeat work, spawned sub-agents, /execute commands) still use the primary.
+   * Format: "provider/model" or an alias like "haiku".
+   */
+  conversationalModel?: string;
   /** Model catalog with optional aliases (full provider/model keys). */
   models?: Record<string, AgentModelEntryConfig>;
   /** Agent working directory (preferred). Used as the default cwd for agent runs. */

@@ -1,0 +1,8 @@
+{
+  "id": "memory-core",
+  "name": "Memory (Core)",
+  "description": "Built-in memory provider using SQLite with FTS and vector search",
+  "version": "1.0.0",
+  "kind": "memory",
+  "configSchema": {}
+}

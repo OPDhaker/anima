@@ -55,6 +55,7 @@ export const AgentDefaultsSchema = z
       })
       .strict()
       .optional(),
+    conversationalModel: z.string().optional(),
     models: z
       .record(
         z.string(),
