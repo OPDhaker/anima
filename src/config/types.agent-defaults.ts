@@ -119,6 +119,38 @@ export type AgentDefaultsConfig = {
    * Format: "provider/model" or an alias like "haiku".
    */
   conversationalModel?: string;
+  /**
+   * Layered execution architecture for agent wake/think/act cycles.
+   *
+   * - **wake**: Triggered on incoming notifications. Uses the cheapest model to
+   *   triage whether the notification needs a full response, a quick reply, or
+   *   can be ignored. Keeps Anima responsive without burning tokens.
+   *
+   * - **innerThoughts**: Background self-reflection cron. Runs on a timer
+   *   (default: every 5 minutes) using the cheapest model. Journals affect state,
+   *   reviews recent activity, and updates the ego/self-model. Not user-facing.
+   *
+   * - **conversation**: Handled by `conversationalModel` above.
+   * - **execution**: Uses the primary model (from `model.primary`).
+   */
+  layers?: {
+    wake?: {
+      /** Model for wake/triage (default: cheapest available, e.g., "haiku"). */
+      model?: string;
+      /** Whether to auto-wake on incoming notifications (default: true). */
+      enabled?: boolean;
+    };
+    innerThoughts?: {
+      /** Model for inner thought cycles (default: cheapest available). */
+      model?: string;
+      /** Interval between inner thought cycles (duration string, default: "5m"). */
+      every?: string;
+      /** Enable inner thoughts cron (default: true). */
+      enabled?: boolean;
+      /** Custom prompt for inner thought cycles. */
+      prompt?: string;
+    };
+  };
   /** Model catalog with optional aliases (full provider/model keys). */
   models?: Record<string, AgentModelEntryConfig>;
   /** Agent working directory (preferred). Used as the default cwd for agent runs. */
