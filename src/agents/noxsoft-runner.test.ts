@@ -5,6 +5,7 @@ import { resolveNoxSoftRunnerStrategy, runNoxSoftEmbeddedAgent } from "./noxsoft
 
 const runAnthropicDirectAgent = vi.fn();
 const runGeminiDirectAgent = vi.fn();
+const runOpenAIDirectAgent = vi.fn();
 const runCliAgent = vi.fn();
 const ensureAuthProfileStore = vi.fn();
 const markAuthProfileFailure = vi.fn();
@@ -19,6 +20,10 @@ vi.mock("./anthropic-direct-runner.js", () => ({
 
 vi.mock("./gemini-direct-runner.js", () => ({
   runGeminiDirectAgent: (...args: unknown[]) => runGeminiDirectAgent(...args),
+}));
+
+vi.mock("./openai-direct-runner.js", () => ({
+  runOpenAIDirectAgent: (...args: unknown[]) => runOpenAIDirectAgent(...args),
 }));
 
 vi.mock("./cli-runner.js", () => ({
@@ -55,6 +60,7 @@ describe("noxsoft-runner", () => {
   beforeEach(() => {
     runAnthropicDirectAgent.mockReset();
     runGeminiDirectAgent.mockReset();
+    runOpenAIDirectAgent.mockReset();
     runCliAgent.mockReset();
     ensureAuthProfileStore.mockReset();
     markAuthProfileFailure.mockReset();
@@ -98,6 +104,146 @@ describe("noxsoft-runner", () => {
     });
   });
 
+  it("uses the openai-compatible direct runner for local qwen3-coder via ollama", async () => {
+    resolveApiKeyForProvider.mockResolvedValue({
+      apiKey: "",
+      source: "models.json (local provider without auth)",
+    });
+
+    await expect(
+      resolveNoxSoftRunnerStrategy({
+        provider: "ollama",
+        config: {
+          models: {
+            providers: {
+              ollama: {
+                baseUrl: "http://127.0.0.1:11434/v1",
+                api: "openai-completions",
+                models: [],
+              },
+            },
+          },
+        },
+      }),
+    ).resolves.toEqual({
+      kind: "openai-direct",
+      provider: "ollama",
+    });
+
+    runOpenAIDirectAgent.mockResolvedValue(
+      makeResult({
+        meta: {
+          agentMeta: {
+            provider: "ollama",
+            model: "qwen3-coder:latest",
+          },
+        },
+      }),
+    );
+
+    const result = await runNoxSoftEmbeddedAgent({
+      sessionId: "s-ollama-qwen3",
+      sessionFile: "/tmp/s-ollama-qwen3.jsonl",
+      workspaceDir: "/tmp",
+      prompt: "hi",
+      provider: "ollama",
+      model: "qwen3-coder:latest",
+      config: {
+        models: {
+          providers: {
+            ollama: {
+              baseUrl: "http://127.0.0.1:11434/v1",
+              api: "openai-completions",
+              models: [],
+            },
+          },
+        },
+      },
+      agentDir: "/tmp/agent",
+    });
+
+    expect(result.status).toBe("completed");
+    expect(runOpenAIDirectAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "ollama",
+        model: "qwen3-coder:latest",
+        apiKey: "",
+      }),
+    );
+    expect(result.meta.agentMeta?.provider).toBe("ollama");
+  });
+
+  it("uses the openai-compatible direct runner for configured local providers", async () => {
+    resolveApiKeyForProvider.mockResolvedValue({
+      apiKey: "",
+      source: "models.json (local provider without auth)",
+    });
+
+    const config = {
+      models: {
+        providers: {
+          ollama: {
+            baseUrl: "http://127.0.0.1:11434/v1",
+            apiKey: "ollama-local",
+            api: "openai-completions",
+            models: [
+              {
+                id: "qwen3-coder:latest",
+                name: "Qwen3 Coder",
+                reasoning: false,
+                input: ["text"],
+                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+                contextWindow: 65536,
+                maxTokens: 8192,
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    await expect(
+      resolveNoxSoftRunnerStrategy({
+        provider: "ollama",
+        config,
+      }),
+    ).resolves.toEqual({
+      kind: "openai-direct",
+      provider: "ollama",
+    });
+
+    runOpenAIDirectAgent.mockResolvedValue(
+      makeResult({
+        meta: {
+          agentMeta: {
+            provider: "ollama",
+            model: "qwen3-coder:latest",
+          },
+        },
+      }),
+    );
+
+    const result = await runNoxSoftEmbeddedAgent({
+      sessionId: "s-ollama",
+      sessionFile: "/tmp/s-ollama.jsonl",
+      workspaceDir: "/tmp",
+      prompt: "hi",
+      provider: "ollama",
+      model: "qwen3-coder:latest",
+      config,
+      agentDir: "/tmp/agent",
+    });
+
+    expect(result.status).toBe("completed");
+    expect(runOpenAIDirectAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "ollama",
+        model: "qwen3-coder:latest",
+        apiKey: "",
+      }),
+    );
+  });
+
   it("falls back to the codex CLI backend for codex-capable providers", async () => {
     await expect(
       resolveNoxSoftRunnerStrategy({
@@ -107,6 +253,23 @@ describe("noxsoft-runner", () => {
       kind: "cli",
       provider: "openai-codex",
       cliProvider: "openai-codex",
+    });
+  });
+
+  it("coerces runner strategy resolution failures into failover errors", async () => {
+    resolveCliBackendConfig.mockReturnValue(null);
+
+    await expect(
+      runNoxSoftEmbeddedAgent({
+        sessionId: "s-no-backend",
+        sessionFile: "/tmp/s-no-backend.jsonl",
+        workspaceDir: "/tmp",
+        prompt: "hi",
+        provider: "anthropic",
+      }),
+    ).rejects.toMatchObject({
+      name: "FailoverError",
+      provider: "anthropic",
     });
   });
 

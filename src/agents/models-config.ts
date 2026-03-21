@@ -164,6 +164,16 @@ const SEED_MODELS = [
     reasoning: false,
     input: ["text", "image"],
   },
+
+  // Z.AI — seed GLM-5 so it appears in the local catalog even if upstream model discovery lags.
+  {
+    id: "glm-5",
+    name: "GLM-5",
+    provider: "zai",
+    contextWindow: 200_000,
+    reasoning: true,
+    input: ["text"],
+  },
 ];
 
 export async function ensureAnimaModelsJson(

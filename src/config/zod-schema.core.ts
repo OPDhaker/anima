@@ -3,7 +3,12 @@ import { isSafeExecutableValue } from "../infra/exec-safety.js";
 import { createAllowDenyChannelRulesSchema } from "./zod-schema.allowdeny.js";
 import { sensitive } from "./zod-schema.sensitive.js";
 
-export const ModelApiSchema = z.literal("anthropic-messages");
+export const ModelApiSchema = z.union([
+  z.literal("anthropic-messages"),
+  z.literal("openai-completions"),
+  z.literal("openai-responses"),
+  z.literal("ollama"),
+]);
 
 export const ModelCompatSchema = z
   .object({

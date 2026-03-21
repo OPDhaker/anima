@@ -67,6 +67,27 @@ function resolveProviderAuthOverride(
   return undefined;
 }
 
+function isLocalOpenAICompatibleProvider(entry: ModelProviderConfig | undefined): boolean {
+  const api = entry?.api?.trim();
+  const baseUrl = entry?.baseUrl?.trim();
+  if (!baseUrl || (api !== "openai-completions" && api !== "openai-responses")) {
+    return false;
+  }
+  try {
+    const url = new URL(baseUrl);
+    const host = url.hostname.toLowerCase();
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "0.0.0.0" ||
+      host === "::1" ||
+      host.endsWith(".local")
+    );
+  } catch {
+    return false;
+  }
+}
+
 function resolveEnvSourceLabel(params: {
   applied: Set<string>;
   envVars: string[];
@@ -205,6 +226,11 @@ export async function resolveApiKeyForProvider(params: {
   const customKey = getCustomProviderApiKey(cfg, provider);
   if (customKey) {
     return { apiKey: customKey, source: "models.json", mode: "api-key" };
+  }
+
+  const providerConfig = resolveProviderConfig(cfg, provider);
+  if (isLocalOpenAICompatibleProvider(providerConfig)) {
+    return { apiKey: "", source: "models.json (local provider without auth)", mode: "api-key" };
   }
 
   const normalized = normalizeProviderId(provider);

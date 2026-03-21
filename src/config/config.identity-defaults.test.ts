@@ -150,6 +150,42 @@ describe("config identity defaults", () => {
     });
   });
 
+  it("accepts local openai-compatible ollama provider configs", async () => {
+    await withTempHome("anima-config-identity-", async (home) => {
+      const cfg = await writeAndLoadConfig(home, {
+        models: {
+          mode: "merge",
+          providers: {
+            ollama: {
+              baseUrl: "http://127.0.0.1:11434/v1",
+              apiKey: "ollama-local",
+              api: "openai-completions",
+              models: [
+                {
+                  id: "qwen3-coder:latest",
+                  name: "Qwen3 Coder",
+                  reasoning: false,
+                  input: ["text"],
+                  cost: {
+                    input: 0,
+                    output: 0,
+                    cacheRead: 0,
+                    cacheWrite: 0,
+                  },
+                  contextWindow: 65536,
+                  maxTokens: 8192,
+                },
+              ],
+            },
+          },
+        },
+      });
+
+      expect(cfg.models?.providers?.ollama?.api).toBe("openai-completions");
+      expect(cfg.models?.providers?.ollama?.baseUrl).toBe("http://127.0.0.1:11434/v1");
+    });
+  });
+
   it("respects empty responsePrefix to disable identity defaults", async () => {
     await withTempHome("anima-config-identity-", async (home) => {
       const cfg = await writeAndLoadConfig(home, {

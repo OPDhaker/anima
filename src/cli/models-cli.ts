@@ -25,6 +25,7 @@ import {
   modelsSetCommand,
   modelsSetImageCommand,
   modelsStatusCommand,
+  modelsLocalInstallCommand,
 } from "../commands/models.js";
 import { defaultRuntime } from "../runtime.js";
 import { formatDocsLink } from "../terminal/links.js";
@@ -155,6 +156,25 @@ export function registerModelsCli(program: Command) {
     });
 
   const aliases = models.command("aliases").description("Create and manage model aliases");
+
+  const local = models.command("local").description("Manage local model installation");
+
+  local
+    .command("install")
+    .description("Install the default local Ollama coding model")
+    .option("--model <id>", "Override model id (default: qwen3-coder:latest)")
+    .option("--json", "Output JSON", false)
+    .action(async (opts) => {
+      await runModelsCommand(async () => {
+        await modelsLocalInstallCommand(
+          {
+            model: opts.model as string | undefined,
+            json: Boolean(opts.json),
+          },
+          defaultRuntime,
+        );
+      });
+    });
 
   aliases
     .command("list")

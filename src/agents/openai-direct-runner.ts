@@ -26,6 +26,10 @@ import { resolveSessionAgentIds } from "./agent-scope.js";
 import { resolveBootstrapContextForRun, makeBootstrapWarn } from "./bootstrap-files.js";
 import { buildSystemPrompt } from "./cli-runner/helpers.js";
 import { resolveAnimaDocsPath } from "./docs-path.js";
+import {
+  DEFAULT_LOCAL_OLLAMA_MODEL,
+  ensureLocalOllamaModelInstalled,
+} from "./local-model-installer.js";
 import { createAnimaCodingTools } from "./pi-tools.js";
 import { appendRunnerCapabilityPrompt } from "./runner-capabilities.js";
 import { resolveRunWorkspaceDir } from "./workspace-run.js";
@@ -33,6 +37,18 @@ import { resolveRunWorkspaceDir } from "./workspace-run.js";
 const log = createSubsystemLogger("agent/openai-direct");
 
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
+const DEFAULT_PROVIDER_BASE_URLS: Record<string, string> = {
+  openai: DEFAULT_OPENAI_BASE_URL,
+  minimax: "https://api.minimax.io/v1",
+  ollama: "http://127.0.0.1:11434/v1",
+  lmstudio: "http://127.0.0.1:1234/v1",
+};
+const PROVIDER_API_KEY_HINTS: Record<string, string> = {
+  openai: "OPENAI_API_KEY",
+  minimax: "MINIMAX_API_KEY",
+  ollama: "OLLAMA_API_KEY",
+  lmstudio: "LMSTUDIO_API_KEY",
+};
 
 // Canonical model name mapping for direct API calls
 const MODEL_MAP: Record<string, string> = {
@@ -110,6 +126,13 @@ function resolveModel(model: string | undefined): string {
   return MODEL_MAP[key] ?? key;
 }
 
+function isToolUnsupportedError(body: string): boolean {
+  const normalized = body.toLowerCase();
+  return (
+    normalized.includes("does not support tools") || normalized.includes("tool is not supported")
+  );
+}
+
 /**
  * Clean a JSON Schema for OpenAI's function calling.
  * OpenAI is stricter than most — no unsupported keywords.
@@ -147,7 +170,8 @@ function cleanSchemaForOpenAI(schema: Record<string, unknown>): Record<string, u
  * Falls back to single-turn if history is unavailable.
  */
 export async function runOpenAIDirectAgent(params: {
-  apiKey: string;
+  apiKey?: string;
+  provider?: string;
   sessionId: string;
   sessionKey?: string;
   agentId?: string;
@@ -165,9 +189,16 @@ export async function runOpenAIDirectAgent(params: {
   onAssistantMessageStart?: () => Promise<void> | void;
 }): Promise<EmbeddedPiRunResult> {
   const started = Date.now();
+  const provider = (params.provider ?? "openai").trim() || "openai";
   const resolvedModel = resolveModel(params.model);
 
-  log.info(`direct api exec: model=${resolvedModel} promptChars=${params.prompt.length}`);
+  if (provider === "ollama" && resolvedModel === DEFAULT_LOCAL_OLLAMA_MODEL) {
+    await ensureLocalOllamaModelInstalled({ model: resolvedModel });
+  }
+
+  log.info(
+    `direct api exec: provider=${provider} model=${resolvedModel} promptChars=${params.prompt.length}`,
+  );
 
   // Build system prompt (reuses the same soul file loading as the CLI runner)
   const workspaceResolution = resolveRunWorkspaceDir({
@@ -183,7 +214,7 @@ export async function runOpenAIDirectAgent(params: {
     config: params.config,
     workspaceDir,
     sessionKey: params.sessionKey,
-    modelProvider: "openai",
+    modelProvider: provider,
     modelId: resolvedModel,
   });
 
@@ -239,7 +270,7 @@ export async function runOpenAIDirectAgent(params: {
     docsPath: docsPath ?? undefined,
     tools: executableTools as AgentTool[],
     contextFiles,
-    modelDisplay: `openai/${resolvedModel}`,
+    modelDisplay: `${provider}/${resolvedModel}`,
     agentId: sessionAgentId,
   });
 
@@ -271,10 +302,14 @@ export async function runOpenAIDirectAgent(params: {
   let isDone = false;
   let loopCount = 0;
   const maxLoops = 20;
+  let toolUseEnabled = openaiTools.length > 0;
 
   // Resolve base URL (support custom endpoints)
   const baseUrl =
-    params.config?.models?.providers?.openai?.baseUrl?.trim() || DEFAULT_OPENAI_BASE_URL;
+    params.config?.models?.providers?.[provider]?.baseUrl?.trim() ||
+    params.config?.models?.providers?.openai?.baseUrl?.trim() ||
+    DEFAULT_PROVIDER_BASE_URLS[provider] ||
+    DEFAULT_OPENAI_BASE_URL;
 
   // --- Execution Loop for Tool Calling ---
   while (!isDone && loopCount < maxLoops) {
@@ -288,7 +323,7 @@ export async function runOpenAIDirectAgent(params: {
       stream: true,
     };
 
-    if (openaiTools.length > 0) {
+    if (toolUseEnabled && openaiTools.length > 0) {
       requestBody.tools = openaiTools;
       requestBody.tool_choice = "auto";
     }
@@ -303,8 +338,8 @@ export async function runOpenAIDirectAgent(params: {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${params.apiKey}`,
           "User-Agent": `anima/7.0.0 (openai-direct-runner; ${os.platform()})`,
+          ...(params.apiKey?.trim() ? { Authorization: `Bearer ${params.apiKey}` } : {}),
         },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
@@ -314,13 +349,20 @@ export async function runOpenAIDirectAgent(params: {
 
       if (!response.ok) {
         const body = await response.text().catch(() => "");
+        if (response.status === 400 && toolUseEnabled && isToolUnsupportedError(body)) {
+          log.warn("openai-compatible provider rejected tools; retrying without tools", {
+            provider,
+            model: resolvedModel,
+          });
+          toolUseEnabled = false;
+          continue;
+        }
         const isAuth = response.status === 401 || response.status === 403;
         const isRateLimit = response.status === 429;
         const rateHint = isRateLimit ? " — rate limit hit, will retry next heartbeat." : "";
-        const authHint = isAuth
-          ? " — API key may be invalid. Check OPENAI_API_KEY environment variable."
-          : "";
-        log.error(`openai api error: HTTP ${response.status}${authHint}${rateHint}`, {
+        const apiKeyHint = PROVIDER_API_KEY_HINTS[provider] ?? "API key";
+        const authHint = isAuth ? ` — API key may be invalid. Check ${apiKeyHint}.` : "";
+        log.error(`${provider} api error: HTTP ${response.status}${authHint}${rateHint}`, {
           status: response.status,
           body: body.slice(0, 500),
         });
@@ -494,6 +536,7 @@ export async function runOpenAIDirectAgent(params: {
     inputTokens: totalInputTokens,
     outputTokens: totalOutputTokens,
     model: resolvedModel,
+    provider,
   });
 
   return {
@@ -504,7 +547,7 @@ export async function runOpenAIDirectAgent(params: {
       durationMs,
       agentMeta: {
         model: resolvedModel,
-        provider: "openai",
+        provider,
         usage: {
           input: totalInputTokens,
           output: totalOutputTokens,

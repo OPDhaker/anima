@@ -25,6 +25,7 @@
   "files": [
     "anima.mjs",
     "dist/",
+    "scripts/install-local-qwen3-coder.sh",
     "templates/",
     "skills/",
     "docs/reference/templates/",
@@ -89,6 +90,7 @@
     "mac:open": "open dist/Anima.app",
     "mac:package": "bash scripts/package-mac-app.sh",
     "mac:restart": "bash scripts/restart-mac.sh",
+    "models:local:install": "bash scripts/install-local-qwen3-coder.sh",
     "plugins:sync": "node --import tsx scripts/sync-plugin-versions.ts",
     "postversion": "git push origin --all; git push origin --tags",
     "prepack": "pnpm build && pnpm ui:build",

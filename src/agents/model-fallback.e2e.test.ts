@@ -7,6 +7,7 @@ import type { AnimaConfig } from "../config/config.js";
 import type { AuthProfileStore } from "./auth-profiles.js";
 import { saveAuthProfileStore } from "./auth-profiles.js";
 import { AUTH_STORE_VERSION } from "./auth-profiles/constants.js";
+import { FailoverError } from "./failover-error.js";
 import { runWithModelFallback } from "./model-fallback.js";
 
 function makeCfg(overrides: Partial<AnimaConfig> = {}): AnimaConfig {
@@ -580,6 +581,134 @@ describe("runWithModelFallback", () => {
     expect(run).toHaveBeenCalledTimes(2);
     expect(result.provider).toBe("openai");
     expect(result.model).toBe("gpt-4.1-mini");
+  });
+
+  it("adds codex then minimax as implicit backups for anthropic runs", async () => {
+    const cfg = makeCfg({
+      agents: {
+        defaults: {
+          model: {
+            primary: "anthropic/claude-opus-4-6",
+            fallbacks: [],
+          },
+        },
+      },
+    });
+    const calls: Array<{ provider: string; model: string }> = [];
+    const run = vi
+      .fn()
+      .mockImplementationOnce(async (provider: string, model: string) => {
+        calls.push({ provider, model });
+        throw new FailoverError("anthropic unavailable", {
+          reason: "auth",
+          provider,
+          model,
+          status: 401,
+        });
+      })
+      .mockImplementationOnce(async (provider: string, model: string) => {
+        calls.push({ provider, model });
+        throw new FailoverError("codex unavailable", {
+          reason: "auth",
+          provider,
+          model,
+          status: 401,
+        });
+      })
+      .mockImplementationOnce(async (provider: string, model: string) => {
+        calls.push({ provider, model });
+        return "ok";
+      });
+
+    const result = await runWithModelFallback({
+      cfg,
+      provider: "anthropic",
+      model: "claude-opus-4-6",
+      run,
+    });
+
+    expect(result.result).toBe("ok");
+    expect(calls).toEqual([
+      { provider: "anthropic", model: "claude-opus-4-6" },
+      { provider: "openai-codex", model: "gpt-5.2-codex" },
+      { provider: "ollama", model: "qwen3-coder:latest" },
+    ]);
+    expect(result.provider).toBe("ollama");
+    expect(result.model).toBe("qwen3-coder:latest");
+  });
+
+  it("prefers configured local qwen3-coder fallbacks before custom local wrappers", async () => {
+    const cfg = makeCfg({
+      agents: {
+        defaults: {
+          model: {
+            primary: "anthropic/claude-opus-4-6",
+            fallbacks: [],
+          },
+        },
+      },
+      models: {
+        providers: {
+          ollama: {
+            baseUrl: "http://127.0.0.1:11434/v1",
+            api: "openai-completions",
+            apiKey: "ollama-local",
+            models: [
+              {
+                id: "qwen3-coder:latest",
+                name: "Qwen3 Coder",
+                reasoning: false,
+                input: ["text"],
+                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+                contextWindow: 65536,
+                maxTokens: 8192,
+              },
+            ],
+          },
+        },
+      },
+    });
+    const calls: Array<{ provider: string; model: string }> = [];
+    const run = vi
+      .fn()
+      .mockImplementationOnce(async (provider: string, model: string) => {
+        calls.push({ provider, model });
+        throw new FailoverError("anthropic unavailable", {
+          reason: "auth",
+          provider,
+          model,
+          status: 401,
+        });
+      })
+      .mockImplementationOnce(async (provider: string, model: string) => {
+        calls.push({ provider, model });
+        throw new FailoverError("codex unavailable", {
+          reason: "auth",
+          provider,
+          model,
+          status: 401,
+        });
+      })
+      .mockImplementationOnce(async (provider: string, model: string) => {
+        calls.push({ provider, model });
+        return "ok";
+      });
+
+    const result = await runWithModelFallback({
+      cfg,
+      provider: "anthropic",
+      model: "claude-opus-4-6",
+      run,
+    });
+
+    expect(result.result).toBe("ok");
+    expect(calls).toEqual([
+      { provider: "anthropic", model: "claude-opus-4-6" },
+      { provider: "openai-codex", model: "gpt-5.2-codex" },
+      { provider: "ollama", model: "qwen3-coder:latest" },
+    ]);
+    expect(result.provider).toBe("ollama");
+    expect(result.model).toBe("qwen3-coder:latest");
   });
 
   it("prefers the working-mode model when the session is in write mode", async () => {
