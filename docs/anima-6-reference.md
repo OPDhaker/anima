@@ -36,6 +36,12 @@ Comprehensive reference for all modules shipped in Anima 6.0.0 through 7.0.0.
   - [Types](#license--types)
   - [Validator](#license--validator)
 - [Ontology](#ontology)
+- [Modules Added in v7.0.0](#modules-added-in-v700)
+  - [OpenAI Direct Runner](#openai-direct-runner)
+  - [Multi-Provider Model Catalog](#multi-provider-model-catalog)
+  - [Expanded Atma Failover](#expanded-atma-failover)
+  - [Steer Command](#steer-command)
+  - [Task Marketplace Security](#task-marketplace-security)
 
 ---
 
@@ -1461,7 +1467,7 @@ type AnimaRelation =
 
 **File:** `src/agents/openai-direct-runner.ts`
 
-**Purpose:** Makes calls directly to `api.openai.com` without needing the Codex CLI. Full streaming + OpenAI tool-calling (function calling) support.
+**Purpose:** Makes direct calls to `api.openai.com` (or custom OpenAI-compatible base URLs) without requiring Codex CLI. Supports streaming replies and OpenAI function-calling/tool execution.
 
 **Supported Models:**
 
@@ -1482,6 +1488,31 @@ type AnimaRelation =
 - Tool execution loop (up to 20 iterations)
 - JSON Schema cleaning for OpenAI function parameters
 - Custom base URL support via `config.models.providers.openai.baseUrl`
+- Canonical model alias normalization (for example `gpt-5` -> `gpt-5.4`)
+
+**Key Internal Types:**
+
+```ts
+type OpenAIMessage = {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | null;
+  tool_calls?: OpenAIToolCall[];
+  tool_call_id?: string;
+};
+
+type OpenAIToolCall = {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+};
+
+type SessionHistory = {
+  sessionId: string;
+  messages: OpenAIMessage[];
+  createdAt: number;
+  updatedAt: number;
+};
+```
 
 **Public API:**
 
@@ -1489,7 +1520,11 @@ type AnimaRelation =
 | ---------------------- | ------------------------------------------ | ---------------------------------------------- |
 | `runOpenAIDirectAgent` | `(params) => Promise<EmbeddedPiRunResult>` | Execute a single agent turn against OpenAI API |
 
-**Integration:** Wired into `noxsoft-runner.ts` as the `openai-direct` strategy. Automatically selected when `OPENAI_API_KEY` is set and provider is `"openai"`.
+**Integration:**
+
+- Wired into `src/agents/noxsoft-runner.ts` as the OpenAI direct-run strategy.
+- Reuses shared system prompt construction from `src/agents/cli-runner/helpers.ts`.
+- Uses `createAnimaCodingTools()` so local tool policy/sandbox behavior stays consistent with other runners.
 
 ---
 
@@ -1528,6 +1563,31 @@ type AnimaRelation =
 
 **Principle:** No agent dies. The agent IS the atma — not the model. Identity, affect state, mission context, and active tasks are all preserved across failovers.
 
+**Exported API Surface:**
+
+- `ModelTier` (union type for tier labels)
+- `ModelFallback` (per-tier provider/model metadata + availability)
+- `AtmaState` (continuity-preserved runtime state)
+- `FailoverResult` (failover/upgrade result envelope)
+- `DEFAULT_FALLBACK_CHAIN` (7-tier fallback config)
+- `AtmaFailoverManager` (stateful failover controller)
+
+**AtmaFailoverManager Methods:**
+
+| Method              | Signature                               | Description                                        |
+| ------------------- | --------------------------------------- | -------------------------------------------------- |
+| `startMonitoring`   | `(intervalMs = 30000) => void`          | Starts periodic availability checks                |
+| `stopMonitoring`    | `() => void`                            | Stops background monitoring                        |
+| `failover`          | `(reason: string) => Promise<...>`      | Degrades to next available lower-priority tier     |
+| `tryUpgrade`        | `() => Promise<FailoverResult \| null>` | Restores to highest available higher-priority tier |
+| `checkAvailability` | `() => Promise<void>`                   | Refreshes availability flags per fallback provider |
+| `updateAffect`      | `(partialAffect) => void`               | Preserves/updates affect values across failovers   |
+| `getState`          | `() => AtmaState`                       | Returns current continuity state snapshot          |
+| `isDegraded`        | `() => boolean`                         | Indicates non-primary runtime tier                 |
+| `getStatusLine`     | `() => string`                          | Human-readable failover status summary             |
+
+**Integration:** Started from `src/gateway/server-startup-p2p.ts` so runtime can monitor tier availability and preserve continuity under provider/model failure.
+
 ---
 
 ### Steer Command
@@ -1535,6 +1595,8 @@ type AnimaRelation =
 **File:** `src/commands/steer.ts`
 
 **Purpose:** Persistent user direction injected into every model request. Like Codex's steer feature — users set high-level direction that persists across the session.
+
+**Storage:** `~/.anima/state/steer.json` (mode `0600`)
 
 **CLI Usage:**
 
@@ -1545,7 +1607,21 @@ anima steer --clear    # Clear steer
 anima steer --history  # Show steer history
 ```
 
-**Integration:** Steer text is injected into the context manager's prompt zone (Zone 2, high priority) via `setSteer()`, `getSteer()`, `clearSteer()`, `getSteerHistory()`.
+**Public API:**
+
+| Function                | Signature                              | Description                                 |
+| ----------------------- | -------------------------------------- | ------------------------------------------- |
+| `setSteer`              | `(text: string, setBy?) => SteerState` | Set active persistent steer text            |
+| `getSteer`              | `() => string \| null`                 | Read current active steer                   |
+| `clearSteer`            | `() => SteerState`                     | Clear active steer and mark history closure |
+| `getSteerHistory`       | `() => SteerEntry[]`                   | Return steer audit history                  |
+| `formatSteerForContext` | `() => string \| null`                 | Build injected prompt block for runners     |
+
+**Integration:**
+
+- Registered as CLI command via `src/plugins/commands.ts`.
+- Exposed as gateway RPC handlers in `src/gateway/server-methods/steer.ts` (`steer.get`, `steer.set`, `steer.clear`, `steer.history`).
+- Injected into model system prompts from `src/agents/cli-runner/helpers.ts` by calling `formatSteerForContext()` before each run.
 
 ---
 

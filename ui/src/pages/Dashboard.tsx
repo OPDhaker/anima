@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getConfigSnapshot,
+  getImpactFootprintMetrics,
   getProviderConfig,
   getRegistrationStatus,
   getRuntimeInspect,
@@ -20,6 +21,8 @@ import {
   wakeHeartbeat,
   type ConfigSnapshot,
   type DaemonStatus,
+  type ImpactFootprintFeed,
+  type IcoPublicMetricState,
   type LogsTailResponse,
   type MissionAutoTogglePolicy,
   type ProviderConfig,
@@ -62,6 +65,20 @@ const CHAT_SESSION_KEY = "main";
 const GATEWAY_PROTOCOL_VERSION = 3;
 const DEFAULT_DESCRIPTION =
   "Persistent NoxSoft agent orchestrating ANIMA continuity, mission control, and delivery.";
+const FOOTPRINT_STATE_COPY: Record<IcoPublicMetricState, string> = {
+  live: "Live now",
+  delayed: "Delayed update",
+  stale: "Stale data",
+  unavailable: "Source unavailable",
+};
+const FOOTPRINT_METRIC_ORDER = [
+  { id: "users_total", label: "Users" },
+  { id: "newsletter_subscribers_total", label: "Newsletter Subs" },
+  { id: "downloads_total", label: "Downloads" },
+  { id: "promo_videos_hosted_total", label: "Promo Videos" },
+  { id: "ico_holders_total", label: "ICO Holders" },
+  { id: "ico_total_raised_usd", label: "ICO Raised" },
+] as const;
 
 type RpcResponseFrame = {
   type: "res";
@@ -656,6 +673,7 @@ export default function Dashboard(): React.ReactElement {
     readMemorySettingsDraft(null),
   );
   const [autoToggleDraft, setAutoToggleDraft] = useState<MissionAutoTogglePolicy | null>(null);
+  const [impactFootprint, setImpactFootprint] = useState<ImpactFootprintFeed | null>(null);
   const [logsState, setLogsState] = useState<LogsTailResponse | null>(null);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -702,6 +720,21 @@ export default function Dashboard(): React.ReactElement {
   const workingMode = runtime?.mission?.state?.workingMode ?? "write";
   const repoStatus = runtime?.mission?.repo ?? runtime?.mission?.state?.repo;
   const speechState = runtime?.mission?.state?.speech;
+  const footprintMetrics = impactFootprint?.metrics ?? [];
+  const footprintMetricsById = useMemo(
+    () => new Map(footprintMetrics.map((metric) => [metric.id, metric] as const)),
+    [footprintMetrics],
+  );
+  const footprintAvailableCount = footprintMetrics.filter(
+    (metric) => metric.state !== "unavailable",
+  ).length;
+  const footprintTotalCount = FOOTPRINT_METRIC_ORDER.length;
+  const footprintBadgeTone: "accent" | "success" | "warning" =
+    footprintAvailableCount === 0
+      ? "warning"
+      : footprintAvailableCount === footprintTotalCount
+        ? "success"
+        : "accent";
 
   const refreshDashboard = useCallback(async () => {
     setRefreshing(true);
@@ -714,6 +747,7 @@ export default function Dashboard(): React.ReactElement {
         nextLogs,
         nextProviders,
         nextVoiceWake,
+        nextFootprint,
       ] = await Promise.all([
         getStatus(),
         getRuntimeInspect(),
@@ -722,6 +756,7 @@ export default function Dashboard(): React.ReactElement {
         tailLogs().catch(() => null),
         getProviderConfig().catch(() => null),
         getVoiceWakeConfig().catch(() => ({ triggers: [] })),
+        getImpactFootprintMetrics().catch(() => null),
       ]);
       setStatus(nextStatus);
       setRuntime(nextRuntime);
@@ -740,6 +775,7 @@ export default function Dashboard(): React.ReactElement {
       setVoiceWakeInput(nextVoiceWake.triggers.join(", "));
       setMemoryDraft(readMemorySettingsDraft(nextConfig));
       setAutoToggleDraft(nextRuntime.mission.state.autoToggle);
+      setImpactFootprint(nextFootprint);
       if (nextLogs) {
         setLogsState(nextLogs);
       }
@@ -1674,6 +1710,39 @@ export default function Dashboard(): React.ReactElement {
           label="Queued Events"
           value={String(runtime?.queuedSystemEvents.length ?? 0)}
         />
+      </div>
+
+      <div className="card" style={{ marginBottom: "1.5rem" }}>
+        <div className="card-header">
+          <div>
+            <div className="card-title">Impact Footprint</div>
+            <div className="card-subtitle">Real source feed status for public impact metrics.</div>
+          </div>
+          <StatusPill
+            tone={footprintBadgeTone}
+            label={`${footprintAvailableCount}/${footprintTotalCount} available`}
+          />
+        </div>
+        <div className="stats-grid compact">
+          {FOOTPRINT_METRIC_ORDER.map((entry) => {
+            const metric = footprintMetricsById.get(entry.id);
+            const state = metric?.state ?? "unavailable";
+            const valueText = metric && metric.state !== "unavailable" ? metric.displayValue : "--";
+            return (
+              <RuntimeStat
+                key={entry.id}
+                label={entry.label}
+                value={valueText}
+                detail={`${FOOTPRINT_STATE_COPY[state]} · ${metric?.sourceRef ?? "source unavailable"}`}
+              />
+            );
+          })}
+        </div>
+        <div className="runtime-stat-detail top-gap-sm">
+          {impactFootprint
+            ? `Generated ${formatRelativeTime(impactFootprint.generatedAt)}.`
+            : "Footprint feed unavailable right now."}
+        </div>
       </div>
 
       <div className="dashboard-grid">

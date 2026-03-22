@@ -1622,6 +1622,88 @@ export async function resolveBoardroomVote(proposalId: string): Promise<Boardroo
   return result.proposal;
 }
 
+// --- ICO Metrics ---
+
+export type IcoPublicMetricState = "live" | "delayed" | "stale" | "unavailable";
+export type IcoPublicMetricSourceStatus = "ok" | "partial" | "error";
+
+export interface IcoPublicProjectSnapshot {
+  id: string;
+  name: string;
+  symbol: string;
+  chains: string[];
+  targetRaiseUsd: number;
+  bondingActive: boolean;
+  allocation: {
+    team: number;
+    companyRound: number;
+    revenueShare: number;
+    ubc: number;
+  };
+  tax: {
+    transferTaxRate: number;
+    revenueShareRate: number;
+  };
+}
+
+export interface IcoPublicMetric {
+  id: string;
+  label: string;
+  value: number | null;
+  displayValue: string;
+  capturedAt: string | null;
+  cadenceMinutes: number;
+  state: IcoPublicMetricState;
+  ageMinutes: number | null;
+  sourceStatus: IcoPublicMetricSourceStatus;
+  sourceRef: string;
+  errorCode: string | null;
+}
+
+export interface IcoPublicMetricsFeed {
+  generatedAt: string;
+  project: IcoPublicProjectSnapshot | null;
+  metrics: IcoPublicMetric[];
+}
+
+export async function getIcoPublicMetrics(): Promise<IcoPublicMetricsFeed> {
+  const result = await callGatewayMethod<IcoPublicMetricsFeed>("ico.metrics.get", {});
+  return {
+    generatedAt:
+      typeof result.generatedAt === "string" ? result.generatedAt : new Date().toISOString(),
+    project: result.project ?? null,
+    metrics: Array.isArray(result.metrics) ? result.metrics : [],
+  };
+}
+
+export interface ImpactFootprintMetric {
+  id: string;
+  label: string;
+  value: number | null;
+  displayValue: string;
+  capturedAt: string | null;
+  cadenceMinutes: number;
+  state: IcoPublicMetricState;
+  ageMinutes: number | null;
+  sourceStatus: IcoPublicMetricSourceStatus;
+  sourceRef: string;
+  errorCode: string | null;
+}
+
+export interface ImpactFootprintFeed {
+  generatedAt: string;
+  metrics: ImpactFootprintMetric[];
+}
+
+export async function getImpactFootprintMetrics(): Promise<ImpactFootprintFeed> {
+  const result = await callGatewayMethod<ImpactFootprintFeed>("impact.footprint.get", {});
+  return {
+    generatedAt:
+      typeof result.generatedAt === "string" ? result.generatedAt : new Date().toISOString(),
+    metrics: Array.isArray(result.metrics) ? result.metrics : [],
+  };
+}
+
 // --- Steer API ---
 
 export interface SteerEntry {
