@@ -1247,8 +1247,14 @@ export async function setProviderConfig(
   await callGatewayMethod("anima.providers.set", { providers });
 }
 
-export async function toggleProviderRotation(enabled: boolean): Promise<void> {
-  await callGatewayMethod("anima.providers.rotate", { enabled });
+export async function setProviderRotation(
+  autoRotation: boolean,
+  rotationStrategy?: ProviderConfig["rotationStrategy"],
+): Promise<void> {
+  await callGatewayMethod("anima.providers.rotate", {
+    autoRotation,
+    ...(rotationStrategy ? { rotationStrategy } : {}),
+  });
 }
 
 export async function setSVRNEnabled(enabled: boolean): Promise<{ success: boolean }> {

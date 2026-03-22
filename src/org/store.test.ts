@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createOrganization,
+  createOrganizationWithId,
   getOrganization,
   updateOrganization,
   deleteOrganization,
@@ -367,6 +368,103 @@ describe("org store", () => {
       // sanitizeOrgId only allows [a-zA-Z0-9-]
       expect(getOrganization("org..bad")).toBeNull();
       expect(getOrganization("org_bad")).toBeNull();
+    });
+  });
+
+  describe("createOrganizationWithId (NoxSoft sync)", () => {
+    it("creates an org with a specific UUID", () => {
+      const noxId = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+      const org = createOrganizationWithId(
+        noxId,
+        "NoxSoft Synced",
+        "Synced from Nox",
+        "nox-sync",
+        "NoxSoft",
+        "human",
+      );
+
+      expect(org.id).toBe(noxId);
+      expect(org.name).toBe("NoxSoft Synced");
+
+      const retrieved = getOrganization(noxId);
+      expect(retrieved).not.toBeNull();
+      expect(retrieved!.id).toBe(noxId);
+    });
+
+    it("includes NoxSoft ecosystem fields", () => {
+      const org = createOrganizationWithId(
+        "b1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "Synced Org",
+        "desc",
+        "nox-sync",
+        "NoxSoft",
+        "human",
+        {
+          industry: "technology",
+          size: "startup",
+          departments: ["Engineering", "Design"],
+          goals: ["Ship Nox", "Build Empire"],
+          timezone: "Asia/Kolkata",
+          noxLinked: true,
+          lastSyncedAt: "2026-03-22T12:00:00.000Z",
+        },
+      );
+
+      expect(org.industry).toBe("technology");
+      expect(org.size).toBe("startup");
+      expect(org.departments).toEqual(["Engineering", "Design"]);
+      expect(org.goals).toEqual(["Ship Nox", "Build Empire"]);
+      expect(org.timezone).toBe("Asia/Kolkata");
+      expect(org.noxLinked).toBe(true);
+      expect(org.lastSyncedAt).toBe("2026-03-22T12:00:00.000Z");
+    });
+
+    it("throws if org with that ID already exists", () => {
+      const id = "c1b2c3d4-e5f6-7890-abcd-ef1234567890";
+      createOrganizationWithId(id, "First", "desc", "o", "O", "human");
+      expect(() => createOrganizationWithId(id, "Duplicate", "desc", "o", "O", "human")).toThrow(
+        "already exists",
+      );
+    });
+
+    it("rejects invalid IDs (path traversal)", () => {
+      expect(() => createOrganizationWithId("../evil", "Bad", "desc", "o", "O", "human")).toThrow(
+        "disallowed characters",
+      );
+    });
+  });
+
+  describe("NoxSoft ecosystem fields in updateOrganization", () => {
+    it("updates all NoxSoft fields", () => {
+      const org = createOrganization("Test", "desc", "o", "O", "human");
+      const updated = updateOrganization(org.id, {
+        industry: "fintech",
+        size: "enterprise",
+        departments: ["Eng", "Sales"],
+        goals: ["Revenue"],
+        timezone: "UTC",
+        onboardingStatus: "complete",
+        noxLinked: true,
+        lastSyncedAt: "2026-03-22T00:00:00Z",
+      });
+
+      expect(updated!.industry).toBe("fintech");
+      expect(updated!.size).toBe("enterprise");
+      expect(updated!.departments).toEqual(["Eng", "Sales"]);
+      expect(updated!.goals).toEqual(["Revenue"]);
+      expect(updated!.timezone).toBe("UTC");
+      expect(updated!.onboardingStatus).toBe("complete");
+      expect(updated!.noxLinked).toBe(true);
+      expect(updated!.lastSyncedAt).toBe("2026-03-22T00:00:00Z");
+    });
+
+    it("persists NoxSoft fields across read/write", () => {
+      const org = createOrganization("Test", "desc", "o", "O", "human");
+      updateOrganization(org.id, { industry: "healthcare", noxLinked: true });
+
+      const retrieved = getOrganization(org.id);
+      expect(retrieved!.industry).toBe("healthcare");
+      expect(retrieved!.noxLinked).toBe(true);
     });
   });
 });

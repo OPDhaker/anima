@@ -15,6 +15,13 @@ import {
   getSession,
   getProposal,
 } from "../../org/boardroom.js";
+import {
+  canSync,
+  getSyncStatus,
+  syncCurrentOrg,
+  syncOrgById,
+  pushOrgToNox,
+} from "../../org/nox-sync.js";
 // Note: we reuse INVALID_REQUEST for not-found since the protocol has no NOT_FOUND code
 import {
   listOrganizations,
@@ -352,6 +359,77 @@ export const orgHandlers: GatewayRequestHandlers = {
         return;
       }
       respond(true, { org: result.org, member: result.member }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  // -------------------------------------------------------------------------
+  // NoxSoft ecosystem sync
+  // -------------------------------------------------------------------------
+
+  "org.syncStatus": async ({ respond }) => {
+    try {
+      const connected = canSync();
+      const orgs = getSyncStatus();
+      respond(true, { connected, orgs }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  "org.syncCurrent": async ({ respond }) => {
+    try {
+      if (!canSync()) {
+        respond(false, undefined, invalid("Not connected to NoxSoft — no agent token found"));
+        return;
+      }
+      const org = await syncCurrentOrg();
+      if (!org) {
+        respond(false, undefined, invalid("Failed to sync org from NoxSoft"));
+        return;
+      }
+      respond(true, { org }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  "org.syncById": async ({ params, respond }) => {
+    const orgId = requireString(params, "orgId");
+    if (!orgId) {
+      respond(false, undefined, invalid("orgId is required"));
+      return;
+    }
+    try {
+      const org = await syncOrgById(orgId);
+      if (!org) {
+        respond(false, undefined, invalid("Failed to sync org from NoxSoft"));
+        return;
+      }
+      respond(true, { org }, undefined);
+    } catch (error) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
+    }
+  },
+
+  "org.pushToNox": async ({ params, respond }) => {
+    const orgId = requireString(params, "orgId");
+    if (!orgId) {
+      respond(false, undefined, invalid("orgId is required"));
+      return;
+    }
+    try {
+      const ok = await pushOrgToNox(orgId);
+      if (!ok) {
+        respond(
+          false,
+          undefined,
+          invalid("Failed to push org to NoxSoft (not linked or API error)"),
+        );
+        return;
+      }
+      respond(true, { ok: true }, undefined);
     } catch (error) {
       respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(error)));
     }

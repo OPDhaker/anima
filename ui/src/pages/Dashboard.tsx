@@ -16,7 +16,7 @@ import {
   setWorkingMode,
   setVoiceWakeConfig,
   tailLogs,
-  toggleProviderRotation,
+  setProviderRotation,
   wakeHeartbeat,
   type ConfigSnapshot,
   type DaemonStatus,
@@ -1404,7 +1404,10 @@ export default function Dashboard(): React.ReactElement {
           priority: provider.priority,
         })),
       );
-      await toggleProviderRotation(providerConfig.autoRotation);
+      await setProviderRotation(
+        providerConfig.autoRotation,
+        providerConfig.rotationStrategy || "on-rate-limit",
+      );
       await refreshDashboard();
       setActionMessage("Provider settings updated.");
     } catch (error) {
@@ -2084,6 +2087,22 @@ export default function Dashboard(): React.ReactElement {
                     />
                     Auto-rotate providers
                   </label>
+                  <select
+                    value={providerConfig.rotationStrategy || "on-rate-limit"}
+                    onChange={(event) =>
+                      setProviderConfig((current) =>
+                        current
+                          ? {
+                              ...current,
+                              rotationStrategy: event.target.value,
+                            }
+                          : current,
+                      )
+                    }
+                  >
+                    <option value="on-rate-limit">On rate limit</option>
+                    <option value="round-robin">Round robin</option>
+                  </select>
                 </div>
                 <div className="button-row top-gap">
                   <button
