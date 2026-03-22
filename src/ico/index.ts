@@ -54,3 +54,13 @@ export {
   addVerificationDocument,
   addAffiliation,
 } from "./verification.js";
+
+export {
+  type IcoPublicMetricState,
+  type IcoPublicMetricSourceStatus,
+  type IcoPublicProjectSnapshot,
+  type IcoPublicMetric,
+  type IcoPublicMetricsFeed,
+  buildIcoPublicMetricsFeed,
+  resolveMetricState,
+} from "./public-metrics.js";

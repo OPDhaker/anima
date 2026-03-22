@@ -13,6 +13,8 @@ import { deviceHandlers } from "./server-methods/devices.js";
 import { egoHandlers } from "./server-methods/ego.js";
 import { execApprovalsHandlers } from "./server-methods/exec-approvals.js";
 import { healthHandlers } from "./server-methods/health.js";
+import { icoHandlers } from "./server-methods/ico.js";
+import { impactHandlers } from "./server-methods/impact.js";
 import { legacyHandlers } from "./server-methods/legacy.js";
 import { logsHandlers } from "./server-methods/logs.js";
 import { mcpHandlers } from "./server-methods/mcp.js";
@@ -45,6 +47,7 @@ const APPROVAL_METHODS = new Set([
   "exec.approval.request",
   "exec.approval.waitDecision",
   "exec.approval.resolve",
+  "desktop.control.session.approve",
 ]);
 const NODE_ROLE_METHODS = new Set(["node.invoke.result", "node.event", "skills.bins"]);
 const PAIRING_METHODS = new Set([
@@ -89,9 +92,14 @@ const READ_METHODS = new Set([
   "node.list",
   "node.describe",
   "chat.history",
+  "browser.capabilities.get",
+  "desktop.control.session.list",
+  "desktop.control.session.get",
   "config.get",
   "talk.config",
   "anima.providers.get",
+  "ico.metrics.get",
+  "impact.footprint.get",
 ]);
 const WRITE_METHODS = new Set([
   "anima.runtime.set-working-mode",
@@ -115,6 +123,9 @@ const WRITE_METHODS = new Set([
   "chat.send",
   "chat.abort",
   "browser.request",
+  "desktop.control.session.create",
+  "desktop.control.session.close",
+  "desktop.control.session.request",
   "anima.providers.set",
   "anima.providers.rotate",
 ]);
@@ -197,6 +208,8 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...logsHandlers,
   ...voicewakeHandlers,
   ...healthHandlers,
+  ...icoHandlers,
+  ...impactHandlers,
   ...channelsHandlers,
   ...chatHandlers,
   ...cronHandlers,

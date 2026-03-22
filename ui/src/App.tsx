@@ -4,6 +4,7 @@ import { trackAmplitudeEvent } from "./amplitude";
 import Dashboard from "./pages/Dashboard";
 import Ego from "./pages/Ego";
 import Freedom from "./pages/Freedom";
+import ICO from "./pages/ICO";
 import JackIn from "./pages/JackIn";
 import Journal from "./pages/Journal";
 import MCP from "./pages/MCP";
@@ -21,6 +22,7 @@ import { useMood } from "./useMood";
 const navItems = [
   { path: "/dashboard", label: "Home", icon: "~" },
   { path: "/mission", label: "Mission", icon: "%" },
+  { path: "/ico", label: "ICO", icon: "I" },
   { path: "/soul", label: "Soul", icon: "@" },
   { path: "/memory", label: "Memory", icon: "#" },
   { path: "/sessions", label: "Sessions", icon: ">" },
@@ -121,6 +123,7 @@ export default function App(): React.ReactElement {
         <Routes>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/mission" element={<MissionControl />} />
+          <Route path="/ico" element={<ICO />} />
           <Route path="/soul" element={<Soul />} />
           <Route path="/memory" element={<Memory />} />
           <Route path="/sessions" element={<Sessions />} />
