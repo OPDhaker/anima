@@ -184,12 +184,16 @@ describe("Self-Reflection", () => {
     });
 
     it("detects improving trend", () => {
-      // Older: bad sessions
+      // Use incrementing timestamps so sort order is deterministic
+      let now = 1_000_000;
+      const spy = vi.spyOn(Date, "now").mockImplementation(() => now++);
+      // Older: bad sessions (timestamps 1000000, 1000001)
       reflect(makeInput({ completed: false, testsWritten: 0, commitCount: 0 }));
       reflect(makeInput({ completed: false, testsWritten: 0, commitCount: 0 }));
-      // Recent: good sessions
+      // Recent: good sessions (timestamps 1000002, 1000003)
       reflect(makeInput());
       reflect(makeInput());
+      spy.mockRestore();
       const patterns = analyzePatterns();
       expect(patterns.trend).toBe("improving");
     });
