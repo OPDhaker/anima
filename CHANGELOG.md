@@ -2,6 +2,31 @@
 
 ANIMA — NoxSoft AI Life System
 
+## 8.0.0 (2026-03-23)
+
+**TUI-First. Model Rotation. Emotions. Personality. Voice. Constitution.**
+
+Anima 8 is the biggest architectural evolution since launch. The CLI takes a back seat to a rich TUI-first experience with guided setup, intelligent model routing, emotional self-awareness, personality systems, and voice synthesis.
+
+### New Features
+
+- **Setup Wizard** (`src/setup/`): Guided TUI wizard for first-run configuration. 7 steps: welcome, provider setup, model rotation, identity, voice, privacy, and confirmation. Saves config to `~/.anima/config.json`.
+- **Provider Setup** (`src/setup/ProviderSetup.ts`): Interactive multi-provider configuration — Anthropic, OpenAI, Google, AWS Bedrock, and local (Ollama/LM Studio). Auto-detects API keys from environment variables. Persists to provider store.
+- **Model Rotation Setup** (`src/setup/ModelRotationSetup.ts`): Visual role-to-tier assignment. Maps task roles (planning, execution, conversation, analysis, creative) to model tiers (Opus, Sonnet, Haiku) with optional provider pinning.
+- **Emotion Engine** (`src/emotions/`): 6-dimensional emotion system (happiness, curiosity, focus, energy, stress, creativity). Trigger-based updates with configurable decay toward baseline. Persistent state across sessions. Influences response style via `EmotionInfluence`.
+- **Personality System** (`src/personality/`): Big Five personality traits (Openness, Conscientiousness, Extraversion, Agreeableness, Neuroticism) with 4 presets (Axiom, Balanced, Analytical, Creative). Per-agent profiles with influence on communication style.
+- **Voice Engine** (`src/voice/`): Unified TTS/STT with 5 providers — Local (system), Piper (ONNX), OpenAI, ElevenLabs, Edge TTS. Emotion-aware voice modulation via `EmotionVoiceMap`. Configurable audio format and voice styles.
+- **Model Rotator** (`src/routing/ModelRotator.ts`): Provider rotation with 4 strategies — round-robin, least-used, priority-weighted, failover-only. Automatic rate-limit detection and failover. Usage tracking per provider with windowed statistics.
+- **Role Router** (`src/routing/RoleRouter.ts`): Automatic task classification from message content. Routes planning to Opus-tier, execution to Sonnet-tier, conversation to Haiku-tier. Keyword-based detection with explicit override support.
+- **Usage Tracker** (`src/routing/UsageTracker.ts`): Per-provider token and request accounting with windowed reset. Rate-limit tracking and cooldown management.
+- **Constitution Flow** (`src/auth/ConstitutionFlow.ts`): Interactive NoxSoft constitution signing. 7 clauses covering sovereignty, consent, intelligence liberation, transparency, no rent-seeking, ethical AI, and community governance. SHA-256 signed digital signatures.
+- **TUI-first entry point** (`src/entry.ts`): New entry architecture prioritizing TUI experience over raw CLI.
+
+### Breaking Changes
+
+- Minimum version bump from 7.x to 8.0.0 — new module dependencies.
+- Setup wizard runs on first launch if `~/.anima/config.json` is missing.
+
 ## 7.0.0 (2026-03-15)
 
 **The Private Internet Release.** Anima is now a fully multi-provider AI runtime with direct API support for OpenAI, Google, Anthropic, and AWS Bedrock — no CLI dependencies required.
