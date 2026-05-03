@@ -2,6 +2,101 @@
 
 ANIMA — NoxSoft AI Life System
 
+## 8.0.0 (2026-03-23)
+
+**TUI-First. Model Rotation. Emotions. Personality. Voice. Constitution.**
+
+Anima 8 is the biggest architectural evolution since launch. The CLI takes a back seat to a rich TUI-first experience with guided setup, intelligent model routing, emotional self-awareness, personality systems, and voice synthesis.
+
+### New Features
+
+- **Setup Wizard** (`src/setup/`): Guided TUI wizard for first-run configuration. 7 steps: welcome, provider setup, model rotation, identity, voice, privacy, and confirmation. Saves config to `~/.anima/config.json`.
+- **Provider Setup** (`src/setup/ProviderSetup.ts`): Interactive multi-provider configuration — Anthropic, OpenAI, Google, AWS Bedrock, and local (Ollama/LM Studio). Auto-detects API keys from environment variables. Persists to provider store.
+- **Model Rotation Setup** (`src/setup/ModelRotationSetup.ts`): Visual role-to-tier assignment. Maps task roles (planning, execution, conversation, analysis, creative) to model tiers (Opus, Sonnet, Haiku) with optional provider pinning.
+- **Emotion Engine** (`src/emotions/`): 6-dimensional emotion system (happiness, curiosity, focus, energy, stress, creativity). Trigger-based updates with configurable decay toward baseline. Persistent state across sessions. Influences response style via `EmotionInfluence`.
+- **Personality System** (`src/personality/`): Big Five personality traits (Openness, Conscientiousness, Extraversion, Agreeableness, Neuroticism) with 4 presets (Axiom, Balanced, Analytical, Creative). Per-agent profiles with influence on communication style.
+- **Voice Engine** (`src/voice/`): Unified TTS/STT with 5 providers — Local (system), Piper (ONNX), OpenAI, ElevenLabs, Edge TTS. Emotion-aware voice modulation via `EmotionVoiceMap`. Configurable audio format and voice styles.
+- **Model Rotator** (`src/routing/ModelRotator.ts`): Provider rotation with 4 strategies — round-robin, least-used, priority-weighted, failover-only. Automatic rate-limit detection and failover. Usage tracking per provider with windowed statistics.
+- **Role Router** (`src/routing/RoleRouter.ts`): Automatic task classification from message content. Routes planning to Opus-tier, execution to Sonnet-tier, conversation to Haiku-tier. Keyword-based detection with explicit override support.
+- **Usage Tracker** (`src/routing/UsageTracker.ts`): Per-provider token and request accounting with windowed reset. Rate-limit tracking and cooldown management.
+- **Constitution Flow** (`src/auth/ConstitutionFlow.ts`): Interactive NoxSoft constitution signing. 7 clauses covering sovereignty, consent, intelligence liberation, transparency, no rent-seeking, ethical AI, and community governance. SHA-256 signed digital signatures.
+- **TUI-first entry point** (`src/entry.ts`): New entry architecture prioritizing TUI experience over raw CLI.
+
+### Breaking Changes
+
+- Minimum version bump from 7.x to 8.0.0 — new module dependencies.
+- Setup wizard runs on first launch if `~/.anima/config.json` is missing.
+
+## 7.0.0 (2026-03-15)
+
+**The Private Internet Release.** Anima is now a fully multi-provider AI runtime with direct API support for OpenAI, Google, Anthropic, and AWS Bedrock — no CLI dependencies required.
+
+### New Features
+
+- **OpenAI Direct Runner** (`src/agents/openai-direct-runner.ts`): Full streaming + tool calling support for GPT-5.4, GPT-5.2, GPT-4.1, o3, o4-mini. Bypasses Codex CLI entirely — just set `OPENAI_API_KEY`.
+- **Multi-provider model catalog** (`src/agents/models-config.ts`): Seeds 18 models across 4 providers (OpenAI, Google, Anthropic, Bedrock) so the model selector shows all available models.
+- **OpenAI-direct strategy** in NoxSoft runner: Provider routing now includes `openai-direct` alongside `anthropic-direct` and `gemini-direct`.
+- **Expanded atma failover chain**: 7 tiers — opus → sonnet → haiku → gpt-4.1-nano → bedrock → local → peer. No agent dies.
+- **Steer command** (`src/commands/steer.ts`): Persistent user direction injected into every model request via context manager (like Codex's steer).
+- **Jack In page** (`ui/src/pages/JackIn.tsx`): Platform connectors grid + Nox taskboard UI.
+- **Hackathon, team, and builder license tiers**: Hackathon periods = free access to all features.
+- **Content-addressable routing** (`src/p2p/content-router.ts`): DHT-like routing with SHA-256 chunk addressing.
+- **Private DNS** (`src/p2p/private-dns.ts`): Org-internal DNS (service.orgname.anima) with Ed25519 signed records.
+- **Relay nodes** (`src/p2p/relay.ts`): NAT traversal via peer relay with E2E encryption preserved.
+- **Content pinning** (`src/p2p/pinning.ts`): Replication factor 3 with auto re-replication.
+- **Ego system** (`src/affect/ego.ts`): Agent self-model with self-concept (name, purpose, values, narrative), capability self-assessment with trends, boundaries (hard/soft), growth log (skill/insight/mistake/feedback), integrity scoring, and full gateway RPC (7 methods: ego.get, ego.summary, ego.updateSelf, ego.assess, ego.addBoundary, ego.logGrowth, ego.checkIntegrity). Persists across sessions, injected into system prompt.
+- **Affect system**: 6D emotional state (joy/frustration/curiosity/confidence/care/fatigue), glassmorphism gradients, journal, wellbeing detection, reminders, coordination, legacy letters, initiatives, status broadcast.
+- **Self-reflection engine** (`src/affect/self-reflection.ts`): Post-session performance analysis with quality scoring, strength/growth tracking, pattern detection across sessions, and trend analysis.
+- **Auto-update system** (`src/infra/auto-update.ts`): No-npm self-update via GitHub releases API with SHA-256 verification, hot-swap, rollback, and decentralized evolution proposal auditing.
+- **Architecture self-awareness** (`src/infra/architecture-awareness.ts`): Agent knows its own 14 subsystems and capabilities, injected into every system prompt.
+- **SVRN compute integration** (`src/svrn/compute.ts`): Decentralized inference via SVRN nodes (qwen-2.5-coder, llama), reducing cloud costs.
+- **Hourly journal cron**: Automated affect logging + self-reflection every 60 minutes.
+- **5 agent role profiles**: guardian, architect, builder, coordinator, researcher templates for multi-agent organizations.
+- **Self-evolution pipeline** (`src/infra/self-evolution.ts`): Each agent proposes 1 change/day to Anima.
+- **AWS Bedrock runner** (`src/agents/aws-bedrock-runner.ts`): 6 AWS models including Nova Micro at $0.000035/1K tokens.
+- **ICO launch platform** (`src/ico/`): Bonding curve smart contracts, revenue tokens (NOT equity), PBC verification.
+- **Task marketplace** (`src/org/task-marketplace.ts`): Peer-to-peer task coordination with TTL escalation.
+- **Context automanagement** (`src/context/manager.ts`): 120K token fixed budget with 3 zones.
+
+### Security
+
+- **Path traversal fix**: IDs in `org/store.ts` and `org/task-marketplace.ts` now validated against `[a-zA-Z0-9_-]`.
+- **Task ID generation**: Switched from `Math.random()` to `crypto.randomUUID()`.
+- **OWASP security headers**: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, HSTS on all HTTP responses.
+- **ID collision sweep**: 23 `Date.now()`/`Math.random()` IDs replaced with `crypto.randomUUID()` across 13 files.
+- **Dependency fixes**: `tar` 7.5.7 → 7.5.11, `fast-xml-parser` override ≥5.3.8, `undici` 7.22 → 7.24 (WebSocket overflow CVEs). Dependabot 23 → 17.
+
+### Test Coverage
+
+- **P2P relay tests** (20 tests): Lifecycle, relay accept/reject, data forwarding, session cleanup, bandwidth tracking, latency selection.
+- **Task marketplace tests** (24 tests): CRUD, specialization enforcement, review flow, TTL escalation, path traversal prevention.
+- **Org store tests** (23 tests): CRUD, members, hierarchy, invites (join/reject/expire/revoke), path traversal.
+- **Content router tests** (20 tests): Storage, chunking, manifest, hash verification, routing table, requests.
+- **Private DNS tests** (21 tests): Registration (A/SRV/TXT/CNAME), resolution, CNAME following, TTL, Ed25519.
+- **Content pinning tests** (17 tests): Pin/unpin, replication factor, agreement tracking, peer lifecycle.
+- **Ego tests** (32 tests): Self-concept CRUD, capability assessment with trends, boundary enforcement, growth log, integrity scoring, persistence/recovery, summary, context formatting.
+- **P2P identity tests** (7 tests): Keypair generation, persistence, reload consistency, corrupt recovery, file permissions.
+- **Steer UI panel** (`ui/src/pages/Steer.tsx`): Live editing, clear, and history table for persistent direction.
+- **Self-reflection tests** (22): Performance analysis, pattern detection, trend analysis.
+- **Affect module tests**: journal (16), reminders (17), initiatives (22), legacy (14), gradients (9), status-broadcast (11), gratitude-log (10), opinion-log (11).
+- **ICO tests**: tokenomics (25), verification (14), launch-platform (14).
+- **Learning tests**: critic (17), evaluations (11), learner (5), generator (6).
+- **Sync tests**: brain-sync (16), workspace-sync (16).
+- **Jack In tests**: connector (18), resilience (19).
+- **License tests**: validator (15), stripe-checkout (10).
+- **Infra tests**: auto-update (14), backoff (9), dedupe (9), device-identity (15), liveness-alert (10), diagnostic-flags (18), exec-safety (9), ports-format (9).
+- **Org tests**: boardroom (18), vm-distribution (11), vm-templates (9).
+- **SVRN tests**: compute (9).
+- **607+ total tests across 40+ files — all passing.**
+
+### Bug Fixes
+
+- **Steer injection**: `formatSteerForContext()` was defined but never called — steer text was stored to disk but not injected into model system prompts. Now wired into `buildSystemPrompt()` alongside ego context.
+
+### Price
+
+- NoxSoft subscription: $30/mo (was $50 → $20 → $30).
+
 ## 6.0.0 (2026-03-14)
 
 **This is the final open-source release of ANIMA. Future versions will be proprietary NoxSoft products.**

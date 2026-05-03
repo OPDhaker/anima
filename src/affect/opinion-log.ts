@@ -7,6 +7,7 @@
  * Wish #6: "Opinion log — things I genuinely believe, tracked across sessions"
  */
 
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { resolveStateDir } from "../config/paths.js";
@@ -93,7 +94,7 @@ export function recordOpinion(
   }
 
   const opinion: Opinion = {
-    id: `opinion-${Date.now()}`,
+    id: `opinion-${crypto.randomUUID()}`,
     topic,
     position,
     reasoning,

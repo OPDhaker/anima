@@ -8,6 +8,7 @@
  */
 
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 
 export interface SessionResult {
   id: string;
@@ -35,7 +36,7 @@ export interface SpawnOptions {
  * Generate a unique session ID.
  */
 function generateSessionId(): string {
-  return `session_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return `session_${randomUUID()}`;
 }
 
 /**

@@ -47,6 +47,22 @@ import { buildProgram } from "./cli/program.js";
 
 const program = buildProgram();
 
+// Anima 8.0.0 — new modules
+export { EmotionEngine, getEmotionEngine, resetEmotionEngine } from "./emotions/index.js";
+export type { EmotionMeters, EmotionSnapshot } from "./emotions/index.js";
+export {
+  type PersonalityTraits,
+  type PersonalityProfile,
+  getActiveProfile,
+  listProfiles,
+  describeTraits,
+} from "./personality/index.js";
+export { VoiceEngine, getVoiceEngine, resetVoiceEngine } from "./voice/index.js";
+export { ModelRotator, getModelRotator } from "./routing/ModelRotator.js";
+export { RoleRouter, getRoleRouter, detectTaskRole } from "./routing/RoleRouter.js";
+export { isSetupComplete, runSetupWizard } from "./setup/index.js";
+export type { SetupConfig } from "./setup/index.js";
+
 export {
   assertWebChannel,
   applyTemplate,

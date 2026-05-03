@@ -200,7 +200,7 @@ export async function runAnthropicDirectAgent(params: {
         "x-api-key": params.token,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
-        "user-agent": `anima/5.1.3 (direct-runner; ${os.platform()})`,
+        "user-agent": `anima/7.0.0 (direct-runner; ${os.platform()})`,
       },
       body: JSON.stringify(requestBody),
       signal: controller.signal,

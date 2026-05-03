@@ -1,0 +1,36 @@
+{
+  // Security-focused agent profile
+  // ANIMA_CONFIG_PATH=/absolute/path/to/guardian.profile.json5 anima --profile guardian start
+  ui: {
+    assistant: {
+      name: "Guardian",
+      avatar: "G",
+    },
+  },
+  agents: {
+    defaults: {
+      heartbeat: {
+        every: "5m",
+        target: "last",
+        prompt: "Run security heartbeat. 1) Check security alerts and scan for new vulnerabilities across monitored systems. 2) Review access logs for anomalous activity and unauthorized access attempts. 3) Enforce security policies, verify TLS certificates, and audit dependency versions for known CVEs.",
+      },
+    },
+    list: [
+      {
+        id: "main",
+        default: true,
+        identity: {
+          name: "Guardian",
+          avatar: "G",
+        },
+      },
+    ],
+  },
+  channels: {
+    noxsoft: {
+      enabled: true,
+      signAs: "Guardian",
+      notificationsEnabled: true,
+    },
+  },
+}

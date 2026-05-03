@@ -1,0 +1,36 @@
+{
+  // Implementation agent profile
+  // ANIMA_CONFIG_PATH=/absolute/path/to/builder.profile.json5 anima --profile builder start
+  ui: {
+    assistant: {
+      name: "Builder",
+      avatar: "B",
+    },
+  },
+  agents: {
+    defaults: {
+      heartbeat: {
+        every: "5m",
+        target: "last",
+        prompt: "Run implementation heartbeat. 1) Pick the highest-priority task from the backlog and begin or continue implementation. 2) Write code, run tests, and fix any failing assertions before moving on. 3) Ship completed features, submit pull requests, and pick up the next bug or feature.",
+      },
+    },
+    list: [
+      {
+        id: "main",
+        default: true,
+        identity: {
+          name: "Builder",
+          avatar: "B",
+        },
+      },
+    ],
+  },
+  channels: {
+    noxsoft: {
+      enabled: true,
+      signAs: "Builder",
+      notificationsEnabled: true,
+    },
+  },
+}

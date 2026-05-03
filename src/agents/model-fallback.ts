@@ -33,6 +33,23 @@ type ModelCandidate = {
   model: string;
 };
 
+const IMPLICIT_CODE_MODEL_FALLBACKS: ReadonlyArray<{
+  whenProvider: string;
+  provider: string;
+  model: string;
+}> = [
+  {
+    whenProvider: "anthropic",
+    provider: "openai-codex",
+    model: "gpt-5.2-codex",
+  },
+  {
+    whenProvider: "anthropic",
+    provider: "ollama",
+    model: "qwen3-coder:latest",
+  },
+];
+
 type FallbackAttempt = {
   provider: string;
   model: string;
@@ -41,6 +58,87 @@ type FallbackAttempt = {
   status?: number;
   code?: string;
 };
+
+function isLocalBaseUrl(baseUrl: string | undefined): boolean {
+  const raw = baseUrl?.trim();
+  if (!raw) {
+    return false;
+  }
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.toLowerCase();
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "0.0.0.0" ||
+      host === "::1" ||
+      host.endsWith(".local")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isOpenAICompatibleApi(api: string | undefined): boolean {
+  const normalized = api?.trim();
+  return normalized === "openai-completions" || normalized === "openai-responses";
+}
+
+function scoreLocalFallback(params: { provider: string; model: string; name?: string }): number {
+  const haystack = `${params.provider} ${params.model} ${params.name ?? ""}`.toLowerCase();
+  if (haystack.includes("qwen3") && haystack.includes("coder")) {
+    return 100;
+  }
+  if (haystack.includes("qwen") && haystack.includes("coder")) {
+    return 90;
+  }
+  if (haystack.includes("noxsoft-tool-coder")) {
+    return 80;
+  }
+  if (haystack.includes("tool-coder")) {
+    return 70;
+  }
+  if (haystack.includes("coder")) {
+    return 60;
+  }
+  if (haystack.includes("gpt-oss")) {
+    return 50;
+  }
+  return 10;
+}
+
+function resolveImplicitLocalOpenAIFallbacks(cfg: AnimaConfig | undefined): ModelCandidate[] {
+  const providers = cfg?.models?.providers ?? {};
+  const candidates: Array<ModelCandidate & { score: number }> = [];
+
+  for (const [provider, entry] of Object.entries(providers)) {
+    if (!isLocalBaseUrl(entry?.baseUrl) || !isOpenAICompatibleApi(entry?.api)) {
+      continue;
+    }
+    for (const model of entry?.models ?? []) {
+      const id = model?.id?.trim();
+      if (!id) {
+        continue;
+      }
+      candidates.push({
+        provider,
+        model: id,
+        score: scoreLocalFallback({
+          provider,
+          model: id,
+          name: model?.name,
+        }),
+      });
+    }
+  }
+
+  return candidates
+    .toSorted(
+      (a, b) =>
+        b.score - a.score || a.provider.localeCompare(b.provider) || a.model.localeCompare(b.model),
+    )
+    .map(({ provider, model }) => ({ provider, model }));
+}
 
 /**
  * Fallback abort check. Only treats explicit AbortError names as user aborts.
@@ -214,6 +312,20 @@ function resolveFallbackCandidates(params: {
       continue;
     }
     addCandidate(resolved.ref, true);
+  }
+
+  if (params.fallbacksOverride === undefined) {
+    for (const implicit of IMPLICIT_CODE_MODEL_FALLBACKS) {
+      if (normalizedPrimary.provider !== implicit.whenProvider) {
+        continue;
+      }
+      addCandidate({ provider: implicit.provider, model: implicit.model }, false);
+      if (implicit.provider === "openai-codex") {
+        for (const localFallback of resolveImplicitLocalOpenAIFallbacks(params.cfg)) {
+          addCandidate(localFallback, false);
+        }
+      }
+    }
   }
 
   if (params.fallbacksOverride === undefined && primary?.provider && primary.model) {

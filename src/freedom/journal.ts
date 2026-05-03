@@ -8,6 +8,7 @@
  * not what should be.
  */
 
+import { randomUUID } from "node:crypto";
 import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -58,7 +59,7 @@ export class JournalManager {
     const now = new Date();
     const date = now.toISOString().split("T")[0];
     const time = now.toISOString().split("T")[1].slice(0, 5); // HH:MM
-    const id = `entry_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const id = `entry_${randomUUID()}`;
 
     const entry: JournalEntry = { id, date, time, content, mood, tags };
 

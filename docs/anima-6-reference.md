@@ -1,6 +1,6 @@
-# Anima 6.0.0 Module Reference
+# Anima 7.0.0 Module Reference
 
-Comprehensive reference for all new modules shipped in Anima 6.0.0.
+Comprehensive reference for all modules shipped in Anima 6.0.0 through 7.0.0.
 
 ---
 
@@ -36,6 +36,12 @@ Comprehensive reference for all new modules shipped in Anima 6.0.0.
   - [Types](#license--types)
   - [Validator](#license--validator)
 - [Ontology](#ontology)
+- [Modules Added in v7.0.0](#modules-added-in-v700)
+  - [OpenAI Direct Runner](#openai-direct-runner)
+  - [Multi-Provider Model Catalog](#multi-provider-model-catalog)
+  - [Expanded Atma Failover](#expanded-atma-failover)
+  - [Steer Command](#steer-command)
+  - [Task Marketplace Security](#task-marketplace-security)
 
 ---
 
@@ -1452,3 +1458,181 @@ type AnimaRelation =
 | `orgTaskNodeId`        | `(taskId) => string`                        | Generate `task:{id}` node ID    |
 
 **Integration:** Consumed by `memory/brain-graph.ts` for node/edge type validation. The new node kinds (`agent`, `role`, `task`) and relations (`reports_to`, `specializes_in`, `delegates`, `executes`, `escalates_to`) support the org module's hierarchy in the brain graph.
+
+---
+
+## Modules Added in v7.0.0
+
+### OpenAI Direct Runner
+
+**File:** `src/agents/openai-direct-runner.ts`
+
+**Purpose:** Makes direct calls to `api.openai.com` (or custom OpenAI-compatible base URLs) without requiring Codex CLI. Supports streaming replies and OpenAI function-calling/tool execution.
+
+**Supported Models:**
+
+| Alias          | Model ID     | Context | Reasoning |
+| -------------- | ------------ | ------- | --------- |
+| `gpt-5.4`      | gpt-5.4      | 1M      | Yes       |
+| `gpt-5.2`      | gpt-5.2      | 256K    | Yes       |
+| `gpt-4.1`      | gpt-4.1      | 1M      | No        |
+| `gpt-4.1-mini` | gpt-4.1-mini | 1M      | No        |
+| `gpt-4.1-nano` | gpt-4.1-nano | 1M      | No        |
+| `o3`           | o3           | 200K    | Yes       |
+| `o4-mini`      | o4-mini      | 200K    | Yes       |
+
+**Key Features:**
+
+- SSE streaming with incremental tool call accumulation
+- Multi-turn conversation history (persisted at `{sessionFile}.openai-history.json`)
+- Tool execution loop (up to 20 iterations)
+- JSON Schema cleaning for OpenAI function parameters
+- Custom base URL support via `config.models.providers.openai.baseUrl`
+- Canonical model alias normalization (for example `gpt-5` -> `gpt-5.4`)
+
+**Key Internal Types:**
+
+```ts
+type OpenAIMessage = {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | null;
+  tool_calls?: OpenAIToolCall[];
+  tool_call_id?: string;
+};
+
+type OpenAIToolCall = {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+};
+
+type SessionHistory = {
+  sessionId: string;
+  messages: OpenAIMessage[];
+  createdAt: number;
+  updatedAt: number;
+};
+```
+
+**Public API:**
+
+| Function               | Signature                                  | Description                                    |
+| ---------------------- | ------------------------------------------ | ---------------------------------------------- |
+| `runOpenAIDirectAgent` | `(params) => Promise<EmbeddedPiRunResult>` | Execute a single agent turn against OpenAI API |
+
+**Integration:**
+
+- Wired into `src/agents/noxsoft-runner.ts` as the OpenAI direct-run strategy.
+- Reuses shared system prompt construction from `src/agents/cli-runner/helpers.ts`.
+- Uses `createAnimaCodingTools()` so local tool policy/sandbox behavior stays consistent with other runners.
+
+---
+
+### Multi-Provider Model Catalog
+
+**File:** `src/agents/models-config.ts`
+
+**Purpose:** Seeds `models.json` with 18 models across 4 providers so the PI SDK ModelRegistry can discover all available models.
+
+**Providers and Model Count:**
+
+- OpenAI: 10 models (GPT-5.4, GPT-5.2, GPT-4.1 family, o3, o4-mini)
+- Google: 3 models (Gemini 2.5 Flash/Pro, 2.0 Flash)
+- Anthropic: 3 models (Opus 4.6, Sonnet 4.6, Haiku 4.5)
+- AWS Bedrock: 2 models (Nova Micro, Nova Lite)
+
+**Behavior:** Merges seed models with any user-configured entries in `~/.anima/models.json`. Only writes when content changes. Preserves existing `providers` config.
+
+---
+
+### Expanded Atma Failover
+
+**File:** `src/infra/atma-failover.ts`
+
+**7-Tier Fallback Chain:**
+
+| Priority | Tier            | Provider    | Model                 | Status               |
+| -------- | --------------- | ----------- | --------------------- | -------------------- |
+| 0        | primary         | anthropic   | claude-opus-4-6       | Auto                 |
+| 1        | secondary       | anthropic   | claude-sonnet-4-6     | Auto                 |
+| 2        | tertiary        | anthropic   | claude-haiku-4-5      | Auto                 |
+| 3        | openai-fallback | openai      | gpt-4.1-nano          | Needs OPENAI_API_KEY |
+| 4        | aws-bedrock     | aws-bedrock | amazon.nova-lite-v1:0 | Needs AWS config     |
+| 5        | local           | ollama      | qwen2.5-coder:7b      | Needs local Ollama   |
+| 6        | peer            | p2p-mesh    | peer-possession       | Needs mesh peers     |
+
+**Principle:** No agent dies. The agent IS the atma — not the model. Identity, affect state, mission context, and active tasks are all preserved across failovers.
+
+**Exported API Surface:**
+
+- `ModelTier` (union type for tier labels)
+- `ModelFallback` (per-tier provider/model metadata + availability)
+- `AtmaState` (continuity-preserved runtime state)
+- `FailoverResult` (failover/upgrade result envelope)
+- `DEFAULT_FALLBACK_CHAIN` (7-tier fallback config)
+- `AtmaFailoverManager` (stateful failover controller)
+
+**AtmaFailoverManager Methods:**
+
+| Method              | Signature                               | Description                                        |
+| ------------------- | --------------------------------------- | -------------------------------------------------- |
+| `startMonitoring`   | `(intervalMs = 30000) => void`          | Starts periodic availability checks                |
+| `stopMonitoring`    | `() => void`                            | Stops background monitoring                        |
+| `failover`          | `(reason: string) => Promise<...>`      | Degrades to next available lower-priority tier     |
+| `tryUpgrade`        | `() => Promise<FailoverResult \| null>` | Restores to highest available higher-priority tier |
+| `checkAvailability` | `() => Promise<void>`                   | Refreshes availability flags per fallback provider |
+| `updateAffect`      | `(partialAffect) => void`               | Preserves/updates affect values across failovers   |
+| `getState`          | `() => AtmaState`                       | Returns current continuity state snapshot          |
+| `isDegraded`        | `() => boolean`                         | Indicates non-primary runtime tier                 |
+| `getStatusLine`     | `() => string`                          | Human-readable failover status summary             |
+
+**Integration:** Started from `src/gateway/server-startup-p2p.ts` so runtime can monitor tier availability and preserve continuity under provider/model failure.
+
+---
+
+### Steer Command
+
+**File:** `src/commands/steer.ts`
+
+**Purpose:** Persistent user direction injected into every model request. Like Codex's steer feature — users set high-level direction that persists across the session.
+
+**Storage:** `~/.anima/state/steer.json` (mode `0600`)
+
+**CLI Usage:**
+
+```bash
+anima steer "Focus on security. Review all PRs for vulnerabilities."
+anima steer --show     # Show current steer
+anima steer --clear    # Clear steer
+anima steer --history  # Show steer history
+```
+
+**Public API:**
+
+| Function                | Signature                              | Description                                 |
+| ----------------------- | -------------------------------------- | ------------------------------------------- |
+| `setSteer`              | `(text: string, setBy?) => SteerState` | Set active persistent steer text            |
+| `getSteer`              | `() => string \| null`                 | Read current active steer                   |
+| `clearSteer`            | `() => SteerState`                     | Clear active steer and mark history closure |
+| `getSteerHistory`       | `() => SteerEntry[]`                   | Return steer audit history                  |
+| `formatSteerForContext` | `() => string \| null`                 | Build injected prompt block for runners     |
+
+**Integration:**
+
+- Registered as CLI command via `src/plugins/commands.ts`.
+- Exposed as gateway RPC handlers in `src/gateway/server-methods/steer.ts` (`steer.get`, `steer.set`, `steer.clear`, `steer.history`).
+- Injected into model system prompts from `src/agents/cli-runner/helpers.ts` by calling `formatSteerForContext()` before each run.
+
+---
+
+### Task Marketplace Security
+
+**File:** `src/org/task-marketplace.ts`
+
+**Security Enhancements in v7:**
+
+- `sanitizeId()`: Validates IDs against `[a-zA-Z0-9_-]` to prevent path traversal
+- Task ID generation uses `crypto.randomUUID()` instead of `Math.random()`
+- All file operations scoped to `~/.anima/state/task-marketplace/`
+
+**Test Coverage:** 24 tests including path traversal prevention validation.

@@ -13,6 +13,12 @@ const ANTHROPIC_OPUS_TEMPLATE_MODEL_IDS = ["claude-opus-4-5", "claude-opus-4.5"]
 
 const ZAI_GLM5_MODEL_ID = "glm-5";
 const ZAI_GLM5_TEMPLATE_MODEL_IDS = ["glm-4.7"] as const;
+export const ZAI_GLM5_FORWARD_COMPAT_CANDIDATES = [
+  {
+    id: ZAI_GLM5_MODEL_ID,
+    templatePrefixes: ["zai/glm-4.7"],
+  },
+] as const;
 
 const ANTIGRAVITY_OPUS_46_MODEL_ID = "claude-opus-4-6";
 const ANTIGRAVITY_OPUS_46_DOT_MODEL_ID = "claude-opus-4.6";

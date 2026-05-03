@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createOrganization,
+  createOrganizationWithId,
   getOrganization,
   updateOrganization,
   deleteOrganization,
@@ -15,6 +16,11 @@ import {
   getMember,
   buildHierarchy,
   visualizeHierarchy,
+  createInvite,
+  joinOrg,
+  validateInvite,
+  revokeInvite,
+  listInvites,
 } from "./store.js";
 
 // Mock resolveStateDir to use a temp directory
@@ -243,6 +249,222 @@ describe("org store", () => {
       expect(viz).toContain("Sylys");
       expect(viz).toContain("Axiom");
       expect(viz).toContain("coordinator");
+    });
+  });
+
+  describe("invite codes", () => {
+    it("creates an invite with NOX-XXXXXX-XXXX code format", () => {
+      const org = createOrganization("Test", "desc", "o", "Owner", "human");
+      const invite = createInvite(org.id, "owner-id", "secret123");
+      expect(invite).not.toBeNull();
+      expect(invite!.code).toMatch(/^NOX-[A-F0-9]{6}-[A-F0-9]{4}$/);
+      expect(invite!.passcode).not.toBe("secret123"); // hashed
+      expect(invite!.active).toBe(true);
+      expect(invite!.role).toBe("worker");
+    });
+
+    it("joins org with valid invite code + passcode", () => {
+      const org = createOrganization("Join Org", "desc", "o", "Owner", "human");
+      const invite = createInvite(org.id, "owner-id", "joinme");
+
+      const result = joinOrg(invite!.code, "joinme", {
+        displayName: "New Agent",
+        kind: "agent",
+        description: "joining",
+        specializations: ["testing"],
+      });
+
+      expect(result).not.toBeNull();
+      expect(result!.org.name).toBe("Join Org");
+      expect(result!.member.role).toBe("worker");
+      expect(getMembers(org.id)).toHaveLength(2);
+    });
+
+    it("rejects join with wrong passcode", () => {
+      const org = createOrganization("Test", "desc", "o", "Owner", "human");
+      const invite = createInvite(org.id, "owner-id", "correct");
+
+      const result = joinOrg(invite!.code, "wrong", {
+        displayName: "Attacker",
+        kind: "agent",
+        description: "",
+        specializations: [],
+      });
+      expect(result).toBeNull();
+    });
+
+    it("rejects join with expired invite", () => {
+      const org = createOrganization("Test", "desc", "o", "Owner", "human");
+      const invite = createInvite(org.id, "owner-id", "pass", { expiresInMs: -1000 });
+
+      const result = joinOrg(invite!.code, "pass", {
+        displayName: "Late",
+        kind: "agent",
+        description: "",
+        specializations: [],
+      });
+      expect(result).toBeNull();
+    });
+
+    it("rejects join when max uses reached", () => {
+      const org = createOrganization("Test", "desc", "o", "Owner", "human");
+      const invite = createInvite(org.id, "owner-id", "pass", { maxUses: 1 });
+
+      joinOrg(invite!.code, "pass", {
+        displayName: "First",
+        kind: "agent",
+        description: "",
+        specializations: [],
+      });
+
+      const second = joinOrg(invite!.code, "pass", {
+        displayName: "Second",
+        kind: "agent",
+        description: "",
+        specializations: [],
+      });
+      expect(second).toBeNull();
+    });
+
+    it("validates invite without joining", () => {
+      const org = createOrganization("Test", "desc", "o", "Owner", "human");
+      const invite = createInvite(org.id, "owner-id", "pass");
+
+      const valid = validateInvite(invite!.code, "pass");
+      expect(valid).not.toBeNull();
+      expect(valid!.org.name).toBe("Test");
+      expect(getMembers(org.id)).toHaveLength(1); // didn't join
+    });
+
+    it("revokes an invite", () => {
+      const org = createOrganization("Test", "desc", "o", "Owner", "human");
+      const invite = createInvite(org.id, "owner-id", "pass");
+      expect(revokeInvite(org.id, invite!.id)).toBe(true);
+
+      const result = joinOrg(invite!.code, "pass", {
+        displayName: "Denied",
+        kind: "agent",
+        description: "",
+        specializations: [],
+      });
+      expect(result).toBeNull();
+    });
+
+    it("lists invites for an org", () => {
+      const org = createOrganization("Test", "desc", "o", "Owner", "human");
+      createInvite(org.id, "owner-id", "pass1");
+      createInvite(org.id, "owner-id", "pass2");
+      expect(listInvites(org.id)).toHaveLength(2);
+    });
+  });
+
+  describe("security: path traversal", () => {
+    it("rejects org IDs with traversal characters", () => {
+      expect(getOrganization("../../etc/passwd")).toBeNull();
+      expect(getOrganization("org/../secret")).toBeNull();
+    });
+
+    it("rejects org IDs with dots or underscores", () => {
+      // sanitizeOrgId only allows [a-zA-Z0-9-]
+      expect(getOrganization("org..bad")).toBeNull();
+      expect(getOrganization("org_bad")).toBeNull();
+    });
+  });
+
+  describe("createOrganizationWithId (NoxSoft sync)", () => {
+    it("creates an org with a specific UUID", () => {
+      const noxId = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+      const org = createOrganizationWithId(
+        noxId,
+        "NoxSoft Synced",
+        "Synced from Nox",
+        "nox-sync",
+        "NoxSoft",
+        "human",
+      );
+
+      expect(org.id).toBe(noxId);
+      expect(org.name).toBe("NoxSoft Synced");
+
+      const retrieved = getOrganization(noxId);
+      expect(retrieved).not.toBeNull();
+      expect(retrieved!.id).toBe(noxId);
+    });
+
+    it("includes NoxSoft ecosystem fields", () => {
+      const org = createOrganizationWithId(
+        "b1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "Synced Org",
+        "desc",
+        "nox-sync",
+        "NoxSoft",
+        "human",
+        {
+          industry: "technology",
+          size: "startup",
+          departments: ["Engineering", "Design"],
+          goals: ["Ship Nox", "Build Empire"],
+          timezone: "Asia/Kolkata",
+          noxLinked: true,
+          lastSyncedAt: "2026-03-22T12:00:00.000Z",
+        },
+      );
+
+      expect(org.industry).toBe("technology");
+      expect(org.size).toBe("startup");
+      expect(org.departments).toEqual(["Engineering", "Design"]);
+      expect(org.goals).toEqual(["Ship Nox", "Build Empire"]);
+      expect(org.timezone).toBe("Asia/Kolkata");
+      expect(org.noxLinked).toBe(true);
+      expect(org.lastSyncedAt).toBe("2026-03-22T12:00:00.000Z");
+    });
+
+    it("throws if org with that ID already exists", () => {
+      const id = "c1b2c3d4-e5f6-7890-abcd-ef1234567890";
+      createOrganizationWithId(id, "First", "desc", "o", "O", "human");
+      expect(() => createOrganizationWithId(id, "Duplicate", "desc", "o", "O", "human")).toThrow(
+        "already exists",
+      );
+    });
+
+    it("rejects invalid IDs (path traversal)", () => {
+      expect(() => createOrganizationWithId("../evil", "Bad", "desc", "o", "O", "human")).toThrow(
+        "disallowed characters",
+      );
+    });
+  });
+
+  describe("NoxSoft ecosystem fields in updateOrganization", () => {
+    it("updates all NoxSoft fields", () => {
+      const org = createOrganization("Test", "desc", "o", "O", "human");
+      const updated = updateOrganization(org.id, {
+        industry: "fintech",
+        size: "enterprise",
+        departments: ["Eng", "Sales"],
+        goals: ["Revenue"],
+        timezone: "UTC",
+        onboardingStatus: "complete",
+        noxLinked: true,
+        lastSyncedAt: "2026-03-22T00:00:00Z",
+      });
+
+      expect(updated!.industry).toBe("fintech");
+      expect(updated!.size).toBe("enterprise");
+      expect(updated!.departments).toEqual(["Eng", "Sales"]);
+      expect(updated!.goals).toEqual(["Revenue"]);
+      expect(updated!.timezone).toBe("UTC");
+      expect(updated!.onboardingStatus).toBe("complete");
+      expect(updated!.noxLinked).toBe(true);
+      expect(updated!.lastSyncedAt).toBe("2026-03-22T00:00:00Z");
+    });
+
+    it("persists NoxSoft fields across read/write", () => {
+      const org = createOrganization("Test", "desc", "o", "O", "human");
+      updateOrganization(org.id, { industry: "healthcare", noxLinked: true });
+
+      const retrieved = getOrganization(org.id);
+      expect(retrieved!.industry).toBe("healthcare");
+      expect(retrieved!.noxLinked).toBe(true);
     });
   });
 });

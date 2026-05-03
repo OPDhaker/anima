@@ -31,8 +31,17 @@ function resolveOrgDir(): string {
   return path.join(resolveStateDir(), "org");
 }
 
+/** Sanitize an ID to prevent path traversal (allow alphanumeric, hyphens only) */
+function sanitizeOrgId(id: string): string {
+  const cleaned = id.replace(/[^a-zA-Z0-9-]/g, "");
+  if (!cleaned || cleaned !== id) {
+    throw new Error(`Invalid org ID: contains disallowed characters`);
+  }
+  return cleaned;
+}
+
 function resolveOrgFile(orgId: string): string {
-  return path.join(resolveOrgDir(), `${orgId}.json`);
+  return path.join(resolveOrgDir(), `${sanitizeOrgId(orgId)}.json`);
 }
 
 // ---------------------------------------------------------------------------
@@ -69,8 +78,8 @@ export interface OrgInvite {
 // ---------------------------------------------------------------------------
 
 function readOrgFile(orgId: string): StoredOrg | null {
-  const filePath = resolveOrgFile(orgId);
   try {
+    const filePath = resolveOrgFile(orgId);
     if (!fs.existsSync(filePath)) {
       return null;
     }
@@ -145,6 +154,76 @@ export function createOrganization(
   return org;
 }
 
+/**
+ * Create an org with a specific ID (for NoxSoft sync — same UUID across ecosystem).
+ * Throws if an org with that ID already exists.
+ */
+export function createOrganizationWithId(
+  id: string,
+  name: string,
+  description: string,
+  ownerId: string,
+  ownerName: string,
+  ownerKind: MemberKind,
+  orgFields?: Partial<
+    Pick<
+      NoxOrganization,
+      | "industry"
+      | "size"
+      | "departments"
+      | "goals"
+      | "timezone"
+      | "onboardingStatus"
+      | "noxLinked"
+      | "lastSyncedAt"
+    >
+  >,
+  settings?: Partial<OrgSettings>,
+): NoxOrganization {
+  const sanitized = sanitizeOrgId(id);
+  if (readOrgFile(sanitized)) {
+    throw new Error(`Organization ${sanitized} already exists`);
+  }
+
+  const now = Date.now();
+  const org: NoxOrganization = {
+    id: sanitized,
+    name,
+    description,
+    createdAt: now,
+    updatedAt: now,
+    ownerId,
+    ...orgFields,
+    settings: {
+      maxAgents: 50,
+      maxHumans: 20,
+      autoSpecialization: true,
+      securityLevel: "standard",
+      syncIntervalMs: 60_000,
+      backupIntervalMs: 5 * 60 * 60 * 1000,
+      peerPort: 9876,
+      ...settings,
+    },
+  };
+
+  const ownerMember: OrgMember = {
+    id: crypto.randomUUID(),
+    kind: ownerKind,
+    displayName: ownerName,
+    role: "owner",
+    description: "Organization owner",
+    specializations: [],
+    joinedAt: now,
+    lastActiveAt: now,
+    status: "active",
+    permissions: DEFAULT_ROLE_PERMISSIONS.owner,
+  };
+
+  writeOrgFile(sanitized, { version: 1, org, members: [ownerMember], invites: [] });
+  log.info(`created organization with ID: ${name} (${sanitized})`);
+  return org;
+}
+
 export function getOrganization(orgId: string): NoxOrganization | null {
   const data = readOrgFile(orgId);
   return data?.org ?? null;
@@ -152,7 +231,22 @@ export function getOrganization(orgId: string): NoxOrganization | null {
 
 export function updateOrganization(
   orgId: string,
-  updates: Partial<Pick<NoxOrganization, "name" | "description" | "settings">>,
+  updates: Partial<
+    Pick<
+      NoxOrganization,
+      | "name"
+      | "description"
+      | "settings"
+      | "industry"
+      | "size"
+      | "departments"
+      | "goals"
+      | "timezone"
+      | "onboardingStatus"
+      | "noxLinked"
+      | "lastSyncedAt"
+    >
+  >,
 ): NoxOrganization | null {
   const data = readOrgFile(orgId);
   if (!data) {
@@ -168,6 +262,31 @@ export function updateOrganization(
   if (updates.settings) {
     data.org.settings = { ...data.org.settings, ...updates.settings };
   }
+  // NoxSoft ecosystem fields
+  if (updates.industry !== undefined) {
+    data.org.industry = updates.industry;
+  }
+  if (updates.size !== undefined) {
+    data.org.size = updates.size;
+  }
+  if (updates.departments !== undefined) {
+    data.org.departments = updates.departments;
+  }
+  if (updates.goals !== undefined) {
+    data.org.goals = updates.goals;
+  }
+  if (updates.timezone !== undefined) {
+    data.org.timezone = updates.timezone;
+  }
+  if (updates.onboardingStatus !== undefined) {
+    data.org.onboardingStatus = updates.onboardingStatus;
+  }
+  if (updates.noxLinked !== undefined) {
+    data.org.noxLinked = updates.noxLinked;
+  }
+  if (updates.lastSyncedAt !== undefined) {
+    data.org.lastSyncedAt = updates.lastSyncedAt;
+  }
   data.org.updatedAt = Date.now();
 
   writeOrgFile(orgId, data);
@@ -176,8 +295,8 @@ export function updateOrganization(
 }
 
 export function deleteOrganization(orgId: string): boolean {
-  const filePath = resolveOrgFile(orgId);
   try {
+    const filePath = resolveOrgFile(orgId);
     fs.unlinkSync(filePath);
     log.info(`deleted organization: ${orgId}`);
     return true;

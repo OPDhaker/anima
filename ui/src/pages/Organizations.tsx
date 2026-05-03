@@ -3,20 +3,26 @@ import {
   listOrgs,
   getOrg,
   createOrg,
-  updateOrg,
   addOrgMember,
   updateOrgMember,
   removeOrgMember,
   getOrgHierarchy,
   joinOrgWithInvite,
   validateOrgInvite,
-  createOrgInvite,
+  listBoardroomSessions,
+  createBoardroomSession,
+  startBoardroomSession,
+  concludeBoardroomSession,
+  listBoardroomProposals,
+  createBoardroomProposal,
   type NoxOrganization,
   type OrgMember,
   type OrgHierarchyNode,
   type OrgMemberKind,
   type OrgRoleType,
   type OrgMemberStatus,
+  type BoardroomSession,
+  type BoardroomProposal,
 } from "../api";
 
 // ---------------------------------------------------------------------------
@@ -35,21 +41,6 @@ function statusDot(status: OrgMemberStatus): string {
       return "status-dot";
     case "suspended":
       return "status-dot error";
-  }
-}
-
-function roleBadge(role: OrgRoleType): string {
-  switch (role) {
-    case "owner":
-      return "badge";
-    case "operator":
-      return "badge";
-    case "coordinator":
-      return "badge";
-    case "worker":
-      return "badge";
-    case "observer":
-      return "badge";
   }
 }
 
@@ -630,7 +621,7 @@ function JoinOrgModal({
         passcode: passcode.trim(),
       });
       setValidOrg(`${result.org.name} (role: ${result.role})`);
-    } catch (err) {
+    } catch {
       setValidError("Invalid invite code or passcode");
       setValidOrg(null);
     } finally {
@@ -860,10 +851,10 @@ function JoinOrgModal({
 function EditMemberPanel({
   member,
   members,
-  orgId,
+  orgId: _orgId,
   onSave,
   onRemove,
-  onCancel,
+  onCancel: _onCancel,
 }: {
   member: OrgMember;
   members: OrgMember[];
@@ -1117,6 +1108,463 @@ function EditMemberPanel({
 }
 
 // ---------------------------------------------------------------------------
+// Boardroom Panel
+// ---------------------------------------------------------------------------
+
+function BoardroomPanel({ orgId }: { orgId: string }): React.ReactElement {
+  const [sessions, setSessions] = useState<BoardroomSession[]>([]);
+  const [proposals, setProposals] = useState<BoardroomProposal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showNewSession, setShowNewSession] = useState(false);
+  const [showNewProposal, setShowNewProposal] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newAgenda, setNewAgenda] = useState("");
+
+  const refresh = useCallback(async () => {
+    try {
+      const [s, p] = await Promise.all([
+        listBoardroomSessions(orgId),
+        listBoardroomProposals(orgId),
+      ]);
+      setSessions(s);
+      setProposals(p);
+    } catch {
+      // silently fail on load
+    } finally {
+      setLoading(false);
+    }
+  }, [orgId]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const handleCreateSession = async () => {
+    if (!newTitle.trim()) {
+      return;
+    }
+    await createBoardroomSession(orgId, {
+      title: newTitle.trim(),
+      agenda: newAgenda.trim().split("\n").filter(Boolean),
+    });
+    setNewTitle("");
+    setNewAgenda("");
+    setShowNewSession(false);
+    await refresh();
+  };
+
+  const handleStartSession = async (sessionId: string) => {
+    await startBoardroomSession(orgId, sessionId);
+    await refresh();
+  };
+
+  const handleConcludeSession = async (sessionId: string) => {
+    await concludeBoardroomSession(orgId, sessionId);
+    await refresh();
+  };
+
+  const handleCreateProposal = async () => {
+    if (!newTitle.trim()) {
+      return;
+    }
+    await createBoardroomProposal(orgId, {
+      title: newTitle.trim(),
+      description: newAgenda.trim(),
+    });
+    setNewTitle("");
+    setNewAgenda("");
+    setShowNewProposal(false);
+    await refresh();
+  };
+
+  const sectionStyle: React.CSSProperties = {
+    marginBottom: 24,
+  };
+
+  const cardStyle: React.CSSProperties = {
+    background: "#111",
+    border: "1px solid #333",
+    borderRadius: 6,
+    padding: 16,
+    marginBottom: 8,
+  };
+
+  const statusColor = (status: string) => {
+    switch (status) {
+      case "scheduled":
+        return "#888";
+      case "in-progress":
+        return "#ff6600";
+      case "concluded":
+        return "#00c853";
+      case "open":
+        return "#2196f3";
+      case "passed":
+        return "#00c853";
+      case "rejected":
+        return "#ff3b30";
+      default:
+        return "#666";
+    }
+  };
+
+  if (loading) {
+    return <div style={{ padding: 20, color: "#666" }}>Loading boardroom...</div>;
+  }
+
+  return (
+    <div>
+      {/* Sessions */}
+      <div style={sectionStyle}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 12,
+          }}
+        >
+          <h3
+            style={{
+              margin: 0,
+              fontSize: 14,
+              color: "#ccc",
+              textTransform: "uppercase",
+              letterSpacing: 1,
+            }}
+          >
+            Sessions
+          </h3>
+          <button
+            onClick={() => {
+              setShowNewSession(!showNewSession);
+              setShowNewProposal(false);
+            }}
+            style={{
+              padding: "6px 12px",
+              background: "transparent",
+              border: "1px solid #ff6600",
+              borderRadius: 4,
+              color: "#ff6600",
+              cursor: "pointer",
+              fontSize: 12,
+              fontFamily: "JetBrains Mono, monospace",
+            }}
+          >
+            + New Session
+          </button>
+        </div>
+
+        {showNewSession && (
+          <div style={{ ...cardStyle, borderColor: "#ff6600" }}>
+            <input
+              type="text"
+              placeholder="Session title..."
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                background: "#0a0a0a",
+                border: "1px solid #333",
+                borderRadius: 4,
+                color: "#eee",
+                fontSize: 13,
+                fontFamily: "JetBrains Mono, monospace",
+                marginBottom: 8,
+                boxSizing: "border-box",
+              }}
+            />
+            <textarea
+              placeholder="Agenda items (one per line)..."
+              value={newAgenda}
+              onChange={(e) => setNewAgenda(e.target.value)}
+              rows={3}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                background: "#0a0a0a",
+                border: "1px solid #333",
+                borderRadius: 4,
+                color: "#eee",
+                fontSize: 13,
+                fontFamily: "JetBrains Mono, monospace",
+                marginBottom: 8,
+                resize: "vertical",
+                boxSizing: "border-box",
+              }}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => void handleCreateSession()}
+                style={{
+                  padding: "6px 16px",
+                  background: "#ff6600",
+                  border: "none",
+                  borderRadius: 4,
+                  color: "#000",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                Create
+              </button>
+              <button
+                onClick={() => setShowNewSession(false)}
+                style={{
+                  padding: "6px 16px",
+                  background: "transparent",
+                  border: "1px solid #333",
+                  borderRadius: 4,
+                  color: "#888",
+                  cursor: "pointer",
+                  fontSize: 12,
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {sessions.length === 0 && !showNewSession && (
+          <div style={{ ...cardStyle, color: "#666", textAlign: "center" }}>
+            No boardroom sessions yet. Create one to begin.
+          </div>
+        )}
+
+        {sessions.map((session) => (
+          <div key={session.id} style={cardStyle}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <span style={{ fontWeight: 600, color: "#eee" }}>{session.title}</span>
+                <span
+                  style={{
+                    marginLeft: 8,
+                    fontSize: 11,
+                    color: statusColor(session.status),
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {session.status}
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: 4 }}>
+                {session.status === "scheduled" && (
+                  <button
+                    onClick={() => void handleStartSession(session.id)}
+                    style={{
+                      padding: "4px 10px",
+                      background: "#ff6600",
+                      border: "none",
+                      borderRadius: 4,
+                      color: "#000",
+                      cursor: "pointer",
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Start
+                  </button>
+                )}
+                {session.status === "in-progress" && (
+                  <button
+                    onClick={() => void handleConcludeSession(session.id)}
+                    style={{
+                      padding: "4px 10px",
+                      background: "#00c853",
+                      border: "none",
+                      borderRadius: 4,
+                      color: "#000",
+                      cursor: "pointer",
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Conclude
+                  </button>
+                )}
+              </div>
+            </div>
+            {session.agenda && session.agenda.length > 0 && (
+              <div style={{ marginTop: 8, fontSize: 12, color: "#888" }}>
+                {session.agenda.map((item, i) => (
+                  <div
+                    key={i}
+                    style={{ paddingLeft: 12, borderLeft: "2px solid #333", marginBottom: 4 }}
+                  >
+                    {item}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ marginTop: 8, fontSize: 11, color: "#555" }}>
+              {session.participants?.length ?? 0} participants
+              {session.decisions?.length ? ` · ${session.decisions.length} decisions` : ""}
+              {" · "}
+              {formatTimestamp(session.createdAt)}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Proposals */}
+      <div style={sectionStyle}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 12,
+          }}
+        >
+          <h3
+            style={{
+              margin: 0,
+              fontSize: 14,
+              color: "#ccc",
+              textTransform: "uppercase",
+              letterSpacing: 1,
+            }}
+          >
+            Proposals
+          </h3>
+          <button
+            onClick={() => {
+              setShowNewProposal(!showNewProposal);
+              setShowNewSession(false);
+            }}
+            style={{
+              padding: "6px 12px",
+              background: "transparent",
+              border: "1px solid #2196f3",
+              borderRadius: 4,
+              color: "#2196f3",
+              cursor: "pointer",
+              fontSize: 12,
+              fontFamily: "JetBrains Mono, monospace",
+            }}
+          >
+            + New Proposal
+          </button>
+        </div>
+
+        {showNewProposal && (
+          <div style={{ ...cardStyle, borderColor: "#2196f3" }}>
+            <input
+              type="text"
+              placeholder="Proposal title..."
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                background: "#0a0a0a",
+                border: "1px solid #333",
+                borderRadius: 4,
+                color: "#eee",
+                fontSize: 13,
+                fontFamily: "JetBrains Mono, monospace",
+                marginBottom: 8,
+                boxSizing: "border-box",
+              }}
+            />
+            <textarea
+              placeholder="Description..."
+              value={newAgenda}
+              onChange={(e) => setNewAgenda(e.target.value)}
+              rows={3}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                background: "#0a0a0a",
+                border: "1px solid #333",
+                borderRadius: 4,
+                color: "#eee",
+                fontSize: 13,
+                fontFamily: "JetBrains Mono, monospace",
+                marginBottom: 8,
+                resize: "vertical",
+                boxSizing: "border-box",
+              }}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => void handleCreateProposal()}
+                style={{
+                  padding: "6px 16px",
+                  background: "#2196f3",
+                  border: "none",
+                  borderRadius: 4,
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                Submit
+              </button>
+              <button
+                onClick={() => setShowNewProposal(false)}
+                style={{
+                  padding: "6px 16px",
+                  background: "transparent",
+                  border: "1px solid #333",
+                  borderRadius: 4,
+                  color: "#888",
+                  cursor: "pointer",
+                  fontSize: 12,
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {proposals.length === 0 && !showNewProposal && (
+          <div style={{ ...cardStyle, color: "#666", textAlign: "center" }}>
+            No proposals yet. Submit one for the org to vote on.
+          </div>
+        )}
+
+        {proposals.map((proposal) => (
+          <div key={proposal.id} style={cardStyle}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <span style={{ fontWeight: 600, color: "#eee" }}>{proposal.title}</span>
+                <span
+                  style={{
+                    marginLeft: 8,
+                    fontSize: 11,
+                    color: statusColor(proposal.status),
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {proposal.status}
+                </span>
+              </div>
+            </div>
+            {proposal.description && (
+              <div style={{ marginTop: 6, fontSize: 12, color: "#aaa" }}>
+                {proposal.description}
+              </div>
+            )}
+            <div style={{ marginTop: 8, fontSize: 11, color: "#555" }}>
+              {proposal.votes?.length ?? 0} votes
+              {proposal.threshold ? ` · threshold: ${(proposal.threshold * 100).toFixed(0)}%` : ""}
+              {" · "}
+              {formatTimestamp(proposal.createdAt)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Organizations Page
 // ---------------------------------------------------------------------------
 
@@ -1129,7 +1577,7 @@ export default function Organizations(): React.ReactElement {
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [hierarchy, setHierarchy] = useState<OrgHierarchyNode[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"tree" | "list" | "settings">("tree");
+  const [activeTab, setActiveTab] = useState<"tree" | "list" | "settings" | "boardroom">("tree");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
@@ -1479,7 +1927,7 @@ export default function Organizations(): React.ReactElement {
 
       {/* Tab bar */}
       <div style={{ display: "flex", gap: 4, marginBottom: 16 }}>
-        {(["tree", "list", "settings"] as const).map((tab) => (
+        {(["tree", "list", "boardroom", "settings"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -1664,6 +2112,9 @@ export default function Organizations(): React.ReactElement {
           </div>
         </div>
       )}
+
+      {/* Boardroom View */}
+      {activeTab === "boardroom" && org && <BoardroomPanel orgId={org.id} />}
 
       {/* Modals */}
       {showCreateModal && (

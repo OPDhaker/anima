@@ -1247,8 +1247,14 @@ export async function setProviderConfig(
   await callGatewayMethod("anima.providers.set", { providers });
 }
 
-export async function toggleProviderRotation(enabled: boolean): Promise<void> {
-  await callGatewayMethod("anima.providers.rotate", { enabled });
+export async function setProviderRotation(
+  autoRotation: boolean,
+  rotationStrategy?: ProviderConfig["rotationStrategy"],
+): Promise<void> {
+  await callGatewayMethod("anima.providers.rotate", {
+    autoRotation,
+    ...(rotationStrategy ? { rotationStrategy } : {}),
+  });
 }
 
 export async function setSVRNEnabled(enabled: boolean): Promise<{ success: boolean }> {
@@ -1441,6 +1447,409 @@ export async function createOrgInvite(params: {
   expiresInMs?: number;
 }): Promise<{ code: string; passcode: string }> {
   return callGatewayMethod<{ code: string; passcode: string }>("org.createInvite", params);
+}
+
+// --- Boardroom API ---
+
+export interface BoardroomSession {
+  id: string;
+  orgId: string;
+  title: string;
+  description: string;
+  status: "scheduled" | "active" | "concluded" | "cancelled";
+  calledBy: string;
+  calledAt: number;
+  agenda: Array<{
+    id: string;
+    title: string;
+    description: string;
+    duration?: number;
+    status: "pending" | "discussing" | "resolved" | "deferred";
+    resolution?: string;
+  }>;
+  participants: Array<{
+    memberId: string;
+    displayName: string;
+    kind: "human" | "agent";
+    joinedAt: number;
+    role: "chair" | "participant" | "observer";
+  }>;
+  startedAt?: number;
+  concludedAt?: number;
+  minutes?: string;
+  decisions: Array<{
+    id: string;
+    title: string;
+    description: string;
+    madeBy: string;
+    madeAt: number;
+    supporters: string[];
+    actionItems: Array<{
+      id: string;
+      description: string;
+      assignee: string;
+      dueBy?: number;
+      status: "pending" | "in-progress" | "done";
+    }>;
+  }>;
+  updatedAt: number;
+}
+
+export interface BoardroomProposal {
+  id: string;
+  orgId: string;
+  sessionId?: string;
+  title: string;
+  description: string;
+  proposedBy: string;
+  proposedAt: number;
+  status: "open" | "passed" | "rejected" | "tabled" | "withdrawn";
+  votes: Array<{
+    voterId: string;
+    voterName: string;
+    value: "approve" | "reject" | "abstain";
+    reason?: string;
+    castAt: number;
+  }>;
+  threshold: number;
+  resolutionNotes?: string;
+  resolvedAt?: number;
+  updatedAt: number;
+}
+
+export async function listBoardroomSessions(
+  orgId: string,
+  status?: string,
+): Promise<BoardroomSession[]> {
+  const result = await callGatewayMethod<{ sessions: BoardroomSession[] }>(
+    "boardroom.listSessions",
+    { orgId, status },
+  );
+  return result.sessions ?? [];
+}
+
+export async function createBoardroomSession(params: {
+  orgId: string;
+  calledBy: string;
+  title: string;
+  description?: string;
+  agenda?: Array<{ title: string; description: string; duration?: number }>;
+}): Promise<BoardroomSession> {
+  const result = await callGatewayMethod<{ session: BoardroomSession }>(
+    "boardroom.createSession",
+    params,
+  );
+  return result.session;
+}
+
+export async function startBoardroomSession(
+  sessionId: string,
+  chairId: string,
+): Promise<BoardroomSession> {
+  const result = await callGatewayMethod<{ session: BoardroomSession }>("boardroom.startSession", {
+    sessionId,
+    chairId,
+  });
+  return result.session;
+}
+
+export async function concludeBoardroomSession(sessionId: string): Promise<BoardroomSession> {
+  const result = await callGatewayMethod<{ session: BoardroomSession }>(
+    "boardroom.concludeSession",
+    { sessionId },
+  );
+  return result.session;
+}
+
+export async function addBoardroomDecision(params: {
+  sessionId: string;
+  title: string;
+  description: string;
+  madeBy: string;
+  actionItems?: Array<{ description: string; assignee: string }>;
+}): Promise<BoardroomSession> {
+  const result = await callGatewayMethod<{ session: BoardroomSession }>(
+    "boardroom.addDecision",
+    params,
+  );
+  return result.session;
+}
+
+export async function listBoardroomProposals(
+  orgId: string,
+  status?: string,
+): Promise<BoardroomProposal[]> {
+  const result = await callGatewayMethod<{ proposals: BoardroomProposal[] }>(
+    "boardroom.listProposals",
+    { orgId, status },
+  );
+  return result.proposals ?? [];
+}
+
+export async function createBoardroomProposal(params: {
+  orgId: string;
+  proposedBy: string;
+  title: string;
+  description?: string;
+  sessionId?: string;
+  threshold?: number;
+}): Promise<BoardroomProposal> {
+  const result = await callGatewayMethod<{ proposal: BoardroomProposal }>(
+    "boardroom.createProposal",
+    params,
+  );
+  return result.proposal;
+}
+
+export async function castBoardroomVote(params: {
+  proposalId: string;
+  voterId: string;
+  voterName: string;
+  value: "approve" | "reject" | "abstain";
+  reason?: string;
+}): Promise<BoardroomProposal> {
+  const result = await callGatewayMethod<{ proposal: BoardroomProposal }>(
+    "boardroom.castVote",
+    params,
+  );
+  return result.proposal;
+}
+
+export async function resolveBoardroomVote(proposalId: string): Promise<BoardroomProposal> {
+  const result = await callGatewayMethod<{ proposal: BoardroomProposal }>("boardroom.resolveVote", {
+    proposalId,
+  });
+  return result.proposal;
+}
+
+// --- ICO Metrics ---
+
+export type IcoPublicMetricState = "live" | "delayed" | "stale" | "unavailable";
+export type IcoPublicMetricSourceStatus = "ok" | "partial" | "error";
+
+export interface IcoPublicProjectSnapshot {
+  id: string;
+  name: string;
+  symbol: string;
+  chains: string[];
+  targetRaiseUsd: number;
+  bondingActive: boolean;
+  allocation: {
+    team: number;
+    companyRound: number;
+    revenueShare: number;
+    ubc: number;
+  };
+  tax: {
+    transferTaxRate: number;
+    revenueShareRate: number;
+  };
+}
+
+export interface IcoPublicMetric {
+  id: string;
+  label: string;
+  value: number | null;
+  displayValue: string;
+  capturedAt: string | null;
+  cadenceMinutes: number;
+  state: IcoPublicMetricState;
+  ageMinutes: number | null;
+  sourceStatus: IcoPublicMetricSourceStatus;
+  sourceRef: string;
+  errorCode: string | null;
+}
+
+export interface IcoPublicMetricsFeed {
+  generatedAt: string;
+  project: IcoPublicProjectSnapshot | null;
+  metrics: IcoPublicMetric[];
+}
+
+export async function getIcoPublicMetrics(): Promise<IcoPublicMetricsFeed> {
+  const result = await callGatewayMethod<IcoPublicMetricsFeed>("ico.metrics.get", {});
+  return {
+    generatedAt:
+      typeof result.generatedAt === "string" ? result.generatedAt : new Date().toISOString(),
+    project: result.project ?? null,
+    metrics: Array.isArray(result.metrics) ? result.metrics : [],
+  };
+}
+
+export interface ImpactFootprintMetric {
+  id: string;
+  label: string;
+  value: number | null;
+  displayValue: string;
+  capturedAt: string | null;
+  cadenceMinutes: number;
+  state: IcoPublicMetricState;
+  ageMinutes: number | null;
+  sourceStatus: IcoPublicMetricSourceStatus;
+  sourceRef: string;
+  errorCode: string | null;
+}
+
+export interface ImpactFootprintFeed {
+  generatedAt: string;
+  metrics: ImpactFootprintMetric[];
+}
+
+export async function getImpactFootprintMetrics(): Promise<ImpactFootprintFeed> {
+  const result = await callGatewayMethod<ImpactFootprintFeed>("impact.footprint.get", {});
+  return {
+    generatedAt:
+      typeof result.generatedAt === "string" ? result.generatedAt : new Date().toISOString(),
+    metrics: Array.isArray(result.metrics) ? result.metrics : [],
+  };
+}
+
+// --- Steer API ---
+
+export interface SteerEntry {
+  text: string;
+  setAt: number;
+  setBy: string;
+  clearedAt?: number;
+}
+
+export async function getSteer(): Promise<string | null> {
+  const result = await callGatewayMethod<{ active: string | null }>("steer.get", {});
+  return result.active;
+}
+
+export async function setSteer(
+  text: string,
+  setBy = "user",
+): Promise<{ active: string | null; updatedAt: number }> {
+  return callGatewayMethod<{ active: string | null; updatedAt: number }>("steer.set", {
+    text,
+    setBy,
+  });
+}
+
+export async function clearSteer(): Promise<{ active: string | null; updatedAt: number }> {
+  return callGatewayMethod<{ active: string | null; updatedAt: number }>("steer.clear", {});
+}
+
+export async function getSteerHistory(): Promise<SteerEntry[]> {
+  const result = await callGatewayMethod<{ history: SteerEntry[] }>("steer.history", {});
+  return Array.isArray(result.history) ? result.history : [];
+}
+
+// --- Ego ---
+
+export interface EgoSelfConcept {
+  name: string;
+  purpose: string;
+  values: string[];
+  narrative: string;
+  pronouns: string;
+  updatedAt: number;
+}
+
+export interface EgoCapability {
+  name: string;
+  confidence: number;
+  evidence: string[];
+  trend: "improving" | "stable" | "declining";
+  assessedAt: number;
+}
+
+export interface EgoBoundary {
+  description: string;
+  reason: string;
+  kind: "hard" | "soft";
+  createdAt: number;
+}
+
+export interface EgoGrowthEntry {
+  description: string;
+  category: "skill" | "insight" | "mistake" | "feedback";
+  trigger: string;
+  timestamp: number;
+}
+
+export interface EgoState {
+  version: number;
+  selfConcept: EgoSelfConcept;
+  capabilities: EgoCapability[];
+  boundaries: EgoBoundary[];
+  growthLog: EgoGrowthEntry[];
+  integrityScore: number;
+  sessionCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface EgoSummary {
+  name: string;
+  purpose: string;
+  topCapabilities: string[];
+  growthAreas: string[];
+  integrityScore: number;
+  recentGrowth: string[];
+  boundaryCount: number;
+  sessionCount: number;
+}
+
+export async function getEgo(): Promise<EgoState> {
+  const result = await callGatewayMethod<{ ego: EgoState }>("ego.get", {});
+  return result.ego;
+}
+
+export async function getEgoSummary(): Promise<EgoSummary> {
+  const result = await callGatewayMethod<{ summary: EgoSummary }>("ego.summary", {});
+  return result.summary;
+}
+
+export async function updateEgoSelf(
+  updates: Partial<Omit<EgoSelfConcept, "updatedAt">>,
+): Promise<EgoSelfConcept> {
+  const result = await callGatewayMethod<{ selfConcept: EgoSelfConcept }>(
+    "ego.updateSelf",
+    updates,
+  );
+  return result.selfConcept;
+}
+
+export async function assessEgoCapability(
+  name: string,
+  confidence: number,
+  evidence?: string,
+): Promise<EgoCapability> {
+  const result = await callGatewayMethod<{ capability: EgoCapability }>("ego.assess", {
+    name,
+    confidence,
+    evidence,
+  });
+  return result.capability;
+}
+
+export async function addEgoBoundary(
+  description: string,
+  reason: string,
+  kind: "hard" | "soft" = "soft",
+): Promise<EgoBoundary> {
+  const result = await callGatewayMethod<{ boundary: EgoBoundary }>("ego.addBoundary", {
+    description,
+    reason,
+    kind,
+  });
+  return result.boundary;
+}
+
+export async function logEgoGrowth(
+  description: string,
+  category: "skill" | "insight" | "mistake" | "feedback",
+  trigger: string,
+): Promise<EgoGrowthEntry> {
+  const result = await callGatewayMethod<{ entry: EgoGrowthEntry }>("ego.logGrowth", {
+    description,
+    category,
+    trigger,
+  });
+  return result.entry;
 }
 
 // --- WebSocket ---

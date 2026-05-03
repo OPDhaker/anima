@@ -19,6 +19,11 @@ import {
   handleA2uiHttpRequest,
 } from "../canvas-host/a2ui.js";
 import { loadConfig } from "../config/config.js";
+import {
+  verifyWebhookSignature,
+  handleWebhookEvent,
+  resolveStripeConfig,
+} from "../license/stripe-checkout.js";
 import { safeEqualSecret } from "../security/secret-equal.js";
 import {
   authorizeGatewayConnect,
@@ -49,6 +54,7 @@ import {
   resolveHookDeliver,
 } from "./hooks.js";
 import { sendGatewayAuthFailure } from "./http-common.js";
+import { HttpRateLimiter, DEFAULT_RATE_LIMIT } from "./http-rate-limit.js";
 import { getBearerToken, getHeader } from "./http-utils.js";
 import { isPrivateOrLoopbackAddress, resolveGatewayClientIp } from "./net.js";
 import { handleOpenAiHttpRequest } from "./openai-http.js";
@@ -465,6 +471,10 @@ export function createGatewayHttpServer(opts: {
     resolvedAuth,
     rateLimiter,
   } = opts;
+
+  // General per-IP HTTP rate limiter (separate from auth brute-force limiter)
+  const httpRateLimiter = new HttpRateLimiter(DEFAULT_RATE_LIMIT);
+
   const httpServer: HttpServer = opts.tlsOptions
     ? createHttpsServer(opts.tlsOptions, (req, res) => {
         void handleRequest(req, res);
@@ -479,10 +489,40 @@ export function createGatewayHttpServer(opts: {
       return;
     }
 
+    // --- Per-IP HTTP rate limiting ---
+    const clientIp = resolveGatewayClientIp(req, []);
+    const rateCheck = httpRateLimiter.check(clientIp);
+    if (!rateCheck.allowed) {
+      const retryAfterSec = Math.ceil(rateCheck.retryAfterMs / 1000);
+      res.writeHead(429, {
+        "Content-Type": "application/json",
+        "Retry-After": String(retryAfterSec),
+        "X-RateLimit-Limit": String(DEFAULT_RATE_LIMIT.maxRequests ?? 100),
+        "X-RateLimit-Remaining": "0",
+      });
+      res.end(JSON.stringify({ error: "Too Many Requests", retryAfterMs: rateCheck.retryAfterMs }));
+      return;
+    }
+
+    // --- Security headers (applied to all HTTP responses) ---
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+
     try {
       const configSnapshot = loadConfig();
       const trustedProxies = configSnapshot.gateway?.trustedProxies ?? [];
       const requestPath = new URL(req.url ?? "/", "http://localhost").pathname;
+
+      // --- Stripe Webhook Endpoint ---
+      if (requestPath === "/webhook/stripe" && req.method === "POST") {
+        await handleStripeWebhook(req, res);
+        return;
+      }
+
       if (await handleHooksRequest(req, res)) {
         return;
       }
@@ -588,6 +628,39 @@ export function createGatewayHttpServer(opts: {
       res.statusCode = 500;
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.end("Internal Server Error");
+    }
+  }
+
+  async function handleStripeWebhook(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const config = resolveStripeConfig();
+    if (!config) {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Stripe not configured" }));
+      return;
+    }
+
+    // Read raw body
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array));
+    }
+    const rawBody = Buffer.concat(chunks).toString("utf8");
+    const signature = String(req.headers["stripe-signature"] ?? "");
+
+    const event = verifyWebhookSignature(rawBody, signature, config.webhookSecret);
+    if (!event) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Invalid signature" }));
+      return;
+    }
+
+    try {
+      const result = await handleWebhookEvent(event);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ received: true, ...result }));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: String(err) }));
     }
   }
 

@@ -1,4 +1,8 @@
 import type { RuntimeEnv } from "../../runtime.js";
+import {
+  DEFAULT_LOCAL_OLLAMA_MODEL,
+  ensureLocalOllamaModelInstalled,
+} from "../../agents/local-model-installer.js";
 import { buildModelAliasIndex, resolveModelRefFromString } from "../../agents/model-selection.js";
 import { loadConfig } from "../../config/config.js";
 import { logConfigUpdated } from "../../config/logging.js";
@@ -40,8 +44,10 @@ export async function modelsFallbacksListCommand(
 }
 
 export async function modelsFallbacksAddCommand(modelRaw: string, runtime: RuntimeEnv) {
+  let resolvedTarget: { provider: string; model: string } | undefined;
   const updated = await updateConfig((cfg) => {
     const resolved = resolveModelTarget({ raw: modelRaw, cfg });
+    resolvedTarget = resolved;
     const targetKey = modelKey(resolved.provider, resolved.model);
     const nextModels = { ...cfg.agents?.defaults?.models };
     if (!nextModels[targetKey]) {
@@ -86,6 +92,13 @@ export async function modelsFallbacksAddCommand(modelRaw: string, runtime: Runti
       },
     };
   });
+
+  if (
+    resolvedTarget?.provider === "ollama" &&
+    resolvedTarget.model === DEFAULT_LOCAL_OLLAMA_MODEL
+  ) {
+    await ensureLocalOllamaModelInstalled({ model: resolvedTarget.model, runtime });
+  }
 
   logConfigUpdated(runtime);
   runtime.log(`Fallbacks: ${(updated.agents?.defaults?.model?.fallbacks ?? []).join(", ")}`);

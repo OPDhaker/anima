@@ -14,6 +14,7 @@
  */
 
 import { execSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { resolveStateDir } from "../config/paths.js";
@@ -104,7 +105,7 @@ export function createProposal(
   description: string,
   filesChanged: string[],
 ): EvolutionProposal {
-  const id = `evo-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const id = `evo-${randomUUID()}`;
   const branch = `evolution/${agentName.toLowerCase().replace(/\s+/g, "-")}/${id}`;
 
   const proposal: EvolutionProposal = {

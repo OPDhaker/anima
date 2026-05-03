@@ -25,6 +25,43 @@ import { initSessionState } from "./session.js";
 import { stageSandboxMedia } from "./stage-sandbox-media.js";
 import { createTypingController } from "./typing.js";
 
+/** Surfaces that represent real-time conversation (chat, DMs, voice). */
+const CONVERSATIONAL_CHAT_TYPES = new Set([
+  "private",
+  "group",
+  "supergroup",
+  "channel",
+  "dm",
+  "chat",
+]);
+
+/**
+ * Returns true when the inbound message originates from a real-time
+ * conversational surface (NoxSoft chat, Telegram, WhatsApp, etc.)
+ * rather than a programmatic/execution context (gateway API, heartbeat, CLI).
+ */
+function isConversationalChannel(ctx: MsgContext): boolean {
+  // Gateway API calls and CLI sessions are execution contexts, not conversational.
+  if (ctx.CommandSource === "native") {
+    return false;
+  }
+  // If the provider is a known chat platform, it's conversational.
+  const provider = ctx.Provider?.toLowerCase() ?? "";
+  if (provider === "telegram" || provider === "whatsapp" || provider === "noxsoft") {
+    return true;
+  }
+  const chatType = ctx.ChatType?.toLowerCase() ?? "";
+  if (CONVERSATIONAL_CHAT_TYPES.has(chatType)) {
+    return true;
+  }
+  // DM-like session keys are conversational.
+  const channel = typeof ctx.OriginatingChannel === "string" ? ctx.OriginatingChannel : "";
+  if (channel && channel !== "gateway" && channel !== "cli") {
+    return true;
+  }
+  return false;
+}
+
 function mergeSkillFilters(channelFilter?: string[], agentFilter?: string[]): string[] | undefined {
   const normalize = (list?: string[]) => {
     if (!Array.isArray(list)) {
@@ -95,6 +132,21 @@ export async function getReplyFromConfig(
       provider = heartbeatRef.ref.provider;
       model = heartbeatRef.ref.model;
       hasResolvedHeartbeatModelOverride = true;
+    }
+  }
+
+  // Route conversational channels (chat, DMs, voice) through a lightweight model
+  // when configured, unless a heartbeat override or explicit session override applies.
+  const isConversationalSurface =
+    !opts?.isHeartbeat && !hasResolvedHeartbeatModelOverride && isConversationalChannel(ctx);
+  if (isConversationalSurface) {
+    const convRaw = agentCfg?.conversationalModel?.trim() ?? "";
+    const convRef = convRaw
+      ? resolveModelRefFromString({ raw: convRaw, defaultProvider, aliasIndex })
+      : null;
+    if (convRef) {
+      provider = convRef.ref.provider;
+      model = convRef.ref.model;
     }
   }
 

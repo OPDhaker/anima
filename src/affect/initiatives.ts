@@ -8,6 +8,7 @@
  * as a formal process"
  */
 
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { resolveStateDir } from "../config/paths.js";
@@ -107,7 +108,7 @@ export function proposeInitiative(
     approvers?: string[];
   },
 ): Initiative {
-  const id = `init-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const id = `init-${randomUUID()}`;
   const now = Date.now();
 
   const initiative: Initiative = {

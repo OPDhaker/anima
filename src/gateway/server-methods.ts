@@ -10,17 +10,24 @@ import { configHandlers } from "./server-methods/config.js";
 import { connectHandlers } from "./server-methods/connect.js";
 import { cronHandlers } from "./server-methods/cron.js";
 import { deviceHandlers } from "./server-methods/devices.js";
+import { egoHandlers } from "./server-methods/ego.js";
 import { execApprovalsHandlers } from "./server-methods/exec-approvals.js";
 import { healthHandlers } from "./server-methods/health.js";
+import { icoHandlers } from "./server-methods/ico.js";
+import { impactHandlers } from "./server-methods/impact.js";
+import { legacyHandlers } from "./server-methods/legacy.js";
 import { logsHandlers } from "./server-methods/logs.js";
 import { mcpHandlers } from "./server-methods/mcp.js";
 import { modelsHandlers } from "./server-methods/models.js";
 import { nodeHandlers } from "./server-methods/nodes.js";
 import { orgHandlers } from "./server-methods/org.js";
 import { providersHandlers } from "./server-methods/providers.js";
+import { reflectionHandlers } from "./server-methods/reflection.js";
 import { sendHandlers } from "./server-methods/send.js";
 import { sessionsHandlers } from "./server-methods/sessions.js";
 import { skillsHandlers } from "./server-methods/skills.js";
+import { steerHandlers } from "./server-methods/steer.js";
+import { subscriptionHandlers } from "./server-methods/subscription.js";
 import { systemHandlers } from "./server-methods/system.js";
 import { talkHandlers } from "./server-methods/talk.js";
 import { ttsHandlers } from "./server-methods/tts.js";
@@ -40,6 +47,7 @@ const APPROVAL_METHODS = new Set([
   "exec.approval.request",
   "exec.approval.waitDecision",
   "exec.approval.resolve",
+  "desktop.control.session.approve",
 ]);
 const NODE_ROLE_METHODS = new Set(["node.invoke.result", "node.event", "skills.bins"]);
 const PAIRING_METHODS = new Set([
@@ -84,9 +92,14 @@ const READ_METHODS = new Set([
   "node.list",
   "node.describe",
   "chat.history",
+  "browser.capabilities.get",
+  "desktop.control.session.list",
+  "desktop.control.session.get",
   "config.get",
   "talk.config",
   "anima.providers.get",
+  "ico.metrics.get",
+  "impact.footprint.get",
 ]);
 const WRITE_METHODS = new Set([
   "anima.runtime.set-working-mode",
@@ -110,6 +123,9 @@ const WRITE_METHODS = new Set([
   "chat.send",
   "chat.abort",
   "browser.request",
+  "desktop.control.session.create",
+  "desktop.control.session.close",
+  "desktop.control.session.request",
   "anima.providers.set",
   "anima.providers.rotate",
 ]);
@@ -192,6 +208,8 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...logsHandlers,
   ...voicewakeHandlers,
   ...healthHandlers,
+  ...icoHandlers,
+  ...impactHandlers,
   ...channelsHandlers,
   ...chatHandlers,
   ...cronHandlers,
@@ -210,6 +228,11 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...updateHandlers,
   ...nodeHandlers,
   ...orgHandlers,
+  ...egoHandlers,
+  ...reflectionHandlers,
+  ...steerHandlers,
+  ...legacyHandlers,
+  ...subscriptionHandlers,
   ...sendHandlers,
   ...usageHandlers,
   ...agentHandlers,

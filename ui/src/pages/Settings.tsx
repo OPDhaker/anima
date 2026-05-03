@@ -14,7 +14,7 @@ import {
   setProviderConfig as saveProviderConfig,
   setRegistrationToken,
   setVoiceWakeConfig,
-  toggleProviderRotation,
+  setProviderRotation,
   wakeHeartbeat,
   type ConfigIssue,
   type ConfigSnapshot,
@@ -324,7 +324,10 @@ export default function Settings(): React.ReactElement {
     setSaving(true);
     setStatusMessage(null);
     try {
-      await toggleProviderRotation(!providerConfig.autoRotation);
+      await setProviderRotation(
+        !providerConfig.autoRotation,
+        providerConfig.rotationStrategy || "on-rate-limit",
+      );
       await refresh();
       setStatusMessage(
         providerConfig.autoRotation ? "Auto-rotation disabled." : "Auto-rotation enabled.",
@@ -536,8 +539,25 @@ export default function Settings(): React.ReactElement {
                   />
                   Auto-rotate on rate limit
                 </label>
+                <span className="runtime-stat-detail">Strategy:</span>
+                <select
+                  value={providerConfig.rotationStrategy || "on-rate-limit"}
+                  onChange={(event) =>
+                    setProviderConfig((current) =>
+                      current
+                        ? {
+                            ...current,
+                            rotationStrategy: event.target.value,
+                          }
+                        : current,
+                    )
+                  }
+                >
+                  <option value="on-rate-limit">On rate limit</option>
+                  <option value="round-robin">Round robin</option>
+                </select>
                 <span className="runtime-stat-detail">
-                  Strategy: {providerConfig.rotationStrategy || "priority"}
+                  {providerConfig.rotationStrategy || "on-rate-limit"}
                 </span>
               </div>
 

@@ -12,6 +12,7 @@ import {
 } from "../../agents/model-auth.js";
 import {
   ANTIGRAVITY_OPUS_46_FORWARD_COMPAT_CANDIDATES,
+  ZAI_GLM5_FORWARD_COMPAT_CANDIDATES,
   resolveForwardCompatModel,
 } from "../../agents/model-forward-compat.js";
 import { ensureAnimaModelsJson } from "../../agents/models-config.js";
@@ -99,7 +100,7 @@ export async function loadModelRegistry(cfg: AnimaConfig) {
   const agentDir = resolveAnimaAgentDir();
   const authStorage = discoverAuthStorage(agentDir);
   const registry = discoverModels(authStorage, agentDir);
-  const appended = appendAntigravityForwardCompatModels(registry.getAll(), registry);
+  const appended = appendKnownForwardCompatModels(registry.getAll(), registry);
   const models = appended.models;
   const synthesizedForwardCompat = appended.synthesizedForwardCompat;
   let availableKeys: Set<string> | undefined;
@@ -133,30 +134,39 @@ type SynthesizedForwardCompat = {
   templatePrefixes: readonly string[];
 };
 
-function appendAntigravityForwardCompatModels(
+function appendKnownForwardCompatModels(
   models: Model<Api>[],
   modelRegistry: ModelRegistry,
 ): { models: Model<Api>[]; synthesizedForwardCompat: SynthesizedForwardCompat[] } {
   const nextModels = [...models];
   const synthesizedForwardCompat: SynthesizedForwardCompat[] = [];
 
-  for (const candidate of ANTIGRAVITY_OPUS_46_FORWARD_COMPAT_CANDIDATES) {
-    const key = modelKey("google-antigravity", candidate.id);
-    const hasForwardCompat = nextModels.some((model) => modelKey(model.provider, model.id) === key);
-    if (hasForwardCompat) {
-      continue;
-    }
+  const candidates = [
+    { provider: "google-antigravity", entries: ANTIGRAVITY_OPUS_46_FORWARD_COMPAT_CANDIDATES },
+    { provider: "zai", entries: ZAI_GLM5_FORWARD_COMPAT_CANDIDATES },
+  ] as const;
 
-    const fallback = resolveForwardCompatModel("google-antigravity", candidate.id, modelRegistry);
-    if (!fallback) {
-      continue;
-    }
+  for (const group of candidates) {
+    for (const candidate of group.entries) {
+      const key = modelKey(group.provider, candidate.id);
+      const hasForwardCompat = nextModels.some(
+        (model) => modelKey(model.provider, model.id) === key,
+      );
+      if (hasForwardCompat) {
+        continue;
+      }
 
-    nextModels.push(fallback);
-    synthesizedForwardCompat.push({
-      key,
-      templatePrefixes: candidate.templatePrefixes,
-    });
+      const fallback = resolveForwardCompatModel(group.provider, candidate.id, modelRegistry);
+      if (!fallback) {
+        continue;
+      }
+
+      nextModels.push(fallback);
+      synthesizedForwardCompat.push({
+        key,
+        templatePrefixes: candidate.templatePrefixes,
+      });
+    }
   }
 
   return { models: nextModels, synthesizedForwardCompat };

@@ -8,6 +8,13 @@ import {
 } from "../../providers/provider-store.js";
 import { ErrorCodes, errorShape } from "../protocol/index.js";
 
+function resolveRotationStrategy(value: unknown): ProviderStore["rotationStrategy"] | undefined {
+  if (value === "on-rate-limit" || value === "round-robin") {
+    return value;
+  }
+  return undefined;
+}
+
 function isValidProviderArray(value: unknown): value is ProviderEntry[] {
   if (!Array.isArray(value)) {
     return false;
@@ -107,12 +114,22 @@ export const providersHandlers: GatewayRequestHandlers = {
   "anima.providers.rotate": ({ params, respond }) => {
     try {
       const store = loadProviderStore();
+      const rawParams = (params ?? {}) as {
+        autoRotation?: unknown;
+        enabled?: unknown;
+        rotationStrategy?: unknown;
+      };
       const autoRotation =
-        typeof (params as { autoRotation?: unknown }).autoRotation === "boolean"
-          ? (params as { autoRotation: boolean }).autoRotation
-          : !store.autoRotation;
+        typeof rawParams.autoRotation === "boolean"
+          ? rawParams.autoRotation
+          : typeof rawParams.enabled === "boolean"
+            ? rawParams.enabled
+            : !store.autoRotation;
+      const rotationStrategy =
+        resolveRotationStrategy(rawParams.rotationStrategy) ?? store.rotationStrategy;
 
       store.autoRotation = autoRotation;
+      store.rotationStrategy = rotationStrategy;
       saveProviderStore(store);
 
       respond(

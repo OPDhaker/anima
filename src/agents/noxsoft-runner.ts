@@ -4,6 +4,7 @@ import type { ThinkLevel } from "../auto-reply/thinking.js";
 import type { AgentStreamParams } from "../commands/agent/types.js";
 import type { AnimaConfig } from "../config/config.js";
 import type { SessionSystemPromptReport } from "../config/sessions/types.js";
+import type { ModelProviderConfig } from "../config/types.models.js";
 import type { AuthProfileFailureReason, AuthProfileStore } from "./auth-profiles.js";
 import { runAnthropicDirectAgent } from "./anthropic-direct-runner.js";
 import {
@@ -14,10 +15,11 @@ import {
 } from "./auth-profiles.js";
 import { resolveCliBackendConfig } from "./cli-backends.js";
 import { runCliAgent } from "./cli-runner.js";
-import { FailoverError, resolveFailoverStatus } from "./failover-error.js";
+import { coerceToFailoverError, FailoverError, resolveFailoverStatus } from "./failover-error.js";
 import { runGeminiDirectAgent } from "./gemini-direct-runner.js";
 import { resolveApiKeyForProvider } from "./model-auth.js";
 import { normalizeModelRef, normalizeProviderId } from "./model-selection.js";
+import { runOpenAIDirectAgent } from "./openai-direct-runner.js";
 import { classifyFailoverReason } from "./pi-embedded-helpers.js";
 import {
   derivePromptTokens,
@@ -73,6 +75,7 @@ export type EmbeddedPiRunResult = {
 export type NoxSoftRunnerStrategy =
   | { kind: "anthropic-direct"; provider: string }
   | { kind: "gemini-direct"; provider: string }
+  | { kind: "openai-direct"; provider: string }
   | { kind: "cli"; provider: string; cliProvider: string };
 
 export type NoxSoftEmbeddedRunParams = {
@@ -102,7 +105,8 @@ export type NoxSoftEmbeddedRunParams = {
   onAgentEvent?: (evt: { stream: string; data: Record<string, unknown> }) => Promise<void> | void;
 } & Record<string, unknown>;
 
-type DirectProvider = "anthropic" | "google";
+type DirectProvider = "anthropic" | "google" | "openai" | "minimax";
+type DirectRunnerKind = "anthropic" | "google" | "openai-compatible";
 
 function normalizeEmbeddedProvider(provider: string | undefined): string {
   const normalized = normalizeProviderId(provider ?? "");
@@ -139,12 +143,36 @@ async function emitAgentEvent(
   await params.onAgentEvent?.({ stream, data });
 }
 
+function resolveProviderConfig(
+  provider: string,
+  config?: AnimaConfig,
+): ModelProviderConfig | undefined {
+  const providers = config?.models?.providers ?? {};
+  const direct = providers[provider] as ModelProviderConfig | undefined;
+  if (direct) {
+    return direct;
+  }
+  const normalized = normalizeProviderId(provider);
+  return Object.entries(providers).find(([key]) => normalizeProviderId(key) === normalized)?.[1];
+}
+
+function isOpenAICompatibleProviderConfig(entry: ModelProviderConfig | undefined): boolean {
+  const api = entry?.api?.trim();
+  return api === "openai-completions" || api === "openai-responses";
+}
+
 function resolveDirectAuthProvider(provider: string): DirectProvider | null {
   if (provider === "anthropic" || provider === "claude") {
     return "anthropic";
   }
   if (provider === "google" || provider === "gemini") {
     return "google";
+  }
+  if (provider === "openai") {
+    return "openai";
+  }
+  if (provider === "minimax") {
+    return "minimax";
   }
   return null;
 }
@@ -282,7 +310,7 @@ function coerceResultFailure(params: {
 }
 
 async function resolveDirectProviderAuth(params: {
-  provider: DirectProvider;
+  provider: string;
   config?: AnimaConfig;
   agentDir?: string;
   preferredProfile?: string;
@@ -299,7 +327,9 @@ async function resolveDirectProviderAuth(params: {
 
 async function runDirectWithProfileFallback(
   params: NoxSoftEmbeddedRunParams & {
-    directProvider: DirectProvider;
+    authProvider: string;
+    runnerKind: DirectRunnerKind;
+    openAIProvider?: string;
     timeoutMs: number;
     runId: string;
     emitPartial: (payload: { text?: string; mediaUrls?: string[] }) => Promise<void>;
@@ -312,7 +342,7 @@ async function runDirectWithProfileFallback(
 
   for (;;) {
     const auth = await resolveDirectProviderAuth({
-      provider: params.directProvider,
+      provider: params.authProvider,
       config: params.config,
       agentDir: params.agentDir,
       preferredProfile,
@@ -326,7 +356,7 @@ async function runDirectWithProfileFallback(
           meta: {
             durationMs: 0,
             error: {
-              message: `Auth fallback loop detected for ${params.directProvider}.`,
+              message: `Auth fallback loop detected for ${params.authProvider}.`,
               kind: "unknown",
             },
           },
@@ -335,44 +365,40 @@ async function runDirectWithProfileFallback(
     }
     attemptedAuthSources.add(authSourceKey);
 
+    const directRunParams = {
+      sessionId: params.sessionId,
+      sessionKey: params.sessionKey,
+      agentId: params.agentId,
+      sessionFile: params.sessionFile,
+      workspaceDir: params.workspaceDir,
+      config: params.config,
+      prompt: params.prompt,
+      model: params.model,
+      thinkLevel: params.thinkLevel,
+      timeoutMs: params.timeoutMs,
+      runId: params.runId,
+      extraSystemPrompt: params.extraSystemPrompt,
+      ownerNumbers: params.ownerNumbers,
+      onPartialReply: params.emitPartial,
+      onAssistantMessageStart: params.onAssistantMessageStart,
+    };
+
     const result =
-      params.directProvider === "anthropic"
+      params.runnerKind === "anthropic"
         ? await runAnthropicDirectAgent({
+            ...directRunParams,
             token: auth.apiKey ?? "",
-            sessionId: params.sessionId,
-            sessionKey: params.sessionKey,
-            agentId: params.agentId,
-            sessionFile: params.sessionFile,
-            workspaceDir: params.workspaceDir,
-            config: params.config,
-            prompt: params.prompt,
-            model: params.model,
-            thinkLevel: params.thinkLevel,
-            timeoutMs: params.timeoutMs,
-            runId: params.runId,
-            extraSystemPrompt: params.extraSystemPrompt,
-            ownerNumbers: params.ownerNumbers,
-            onPartialReply: params.emitPartial,
-            onAssistantMessageStart: params.onAssistantMessageStart,
           })
-        : await runGeminiDirectAgent({
-            apiKey: auth.apiKey ?? "",
-            sessionId: params.sessionId,
-            sessionKey: params.sessionKey,
-            agentId: params.agentId,
-            sessionFile: params.sessionFile,
-            workspaceDir: params.workspaceDir,
-            config: params.config,
-            prompt: params.prompt,
-            model: params.model,
-            thinkLevel: params.thinkLevel,
-            timeoutMs: params.timeoutMs,
-            runId: params.runId,
-            extraSystemPrompt: params.extraSystemPrompt,
-            ownerNumbers: params.ownerNumbers,
-            onPartialReply: params.emitPartial,
-            onAssistantMessageStart: params.onAssistantMessageStart,
-          });
+        : params.runnerKind === "openai-compatible"
+          ? await runOpenAIDirectAgent({
+              ...directRunParams,
+              provider: params.openAIProvider ?? params.authProvider,
+              apiKey: auth.apiKey ?? "",
+            })
+          : await runGeminiDirectAgent({
+              ...directRunParams,
+              apiKey: auth.apiKey ?? "",
+            });
 
     if (result.status === "completed") {
       if (auth.profileId) {
@@ -383,7 +409,7 @@ async function runDirectWithProfileFallback(
         });
         await markAuthProfileGood({
           store,
-          provider: params.directProvider,
+          provider: params.authProvider,
           profileId: auth.profileId,
           agentDir: params.agentDir,
         });
@@ -414,28 +440,49 @@ async function resolveDirectStrategy(
   agentDir?: string,
 ): Promise<NoxSoftRunnerStrategy | null> {
   const directProvider = resolveDirectAuthProvider(provider);
-  if (!directProvider) {
-    return null;
-  }
-  try {
-    const auth = await resolveDirectProviderAuth({
-      provider: directProvider,
-      config,
-      agentDir,
-      store: ensureAuthProfileStore(agentDir, { allowKeychainPrompt: false }),
-    });
-    if (auth.apiKey) {
-      // Anthropic's Messages API does not support OAuth tokens (sk-ant-oat01-...).
-      // These must go through the Claude CLI backend instead.
-      if (directProvider === "anthropic" && auth.apiKey.startsWith("sk-ant-oat01-")) {
-        return null;
+  if (directProvider) {
+    try {
+      const auth = await resolveDirectProviderAuth({
+        provider: directProvider,
+        config,
+        agentDir,
+        store: ensureAuthProfileStore(agentDir, { allowKeychainPrompt: false }),
+      });
+      if (auth.apiKey !== undefined) {
+        // Anthropic's Messages API does not support OAuth tokens (sk-ant-oat01-...).
+        // These must go through the Claude CLI backend instead.
+        if (directProvider === "anthropic" && auth.apiKey.startsWith("sk-ant-oat01-")) {
+          return null;
+        }
+        return {
+          kind:
+            directProvider === "google"
+              ? "gemini-direct"
+              : directProvider === "openai" || directProvider === "minimax"
+                ? "openai-direct"
+                : "anthropic-direct",
+          provider,
+        };
       }
-      return {
-        kind: directProvider === "google" ? "gemini-direct" : "anthropic-direct",
+    } catch {}
+  }
+  const providerConfig = resolveProviderConfig(provider, config);
+  if (isOpenAICompatibleProviderConfig(providerConfig)) {
+    try {
+      const auth = await resolveApiKeyForProvider({
         provider,
-      };
-    }
-  } catch {}
+        cfg: config,
+        agentDir,
+        store: ensureAuthProfileStore(agentDir, { allowKeychainPrompt: false }),
+      });
+      if (auth.apiKey !== undefined) {
+        return {
+          kind: "openai-direct",
+          provider,
+        };
+      }
+    } catch {}
+  }
   return null;
 }
 
@@ -487,11 +534,37 @@ export async function runNoxSoftEmbeddedAgent(
     await emitAgentEvent(params, "assistant", { text: payload.text });
   };
 
-  const strategy = await resolveNoxSoftRunnerStrategy({
-    provider: params.provider,
-    config: params.config,
-    agentDir: params.agentDir,
-  });
+  let strategy: NoxSoftRunnerStrategy;
+  try {
+    strategy = await resolveNoxSoftRunnerStrategy({
+      provider: params.provider,
+      config: params.config,
+      agentDir: params.agentDir,
+    });
+  } catch (error) {
+    const requestedProvider = normalizedRequestedRef?.provider ?? provider;
+    const requestedModel = normalizedRequestedRef?.model;
+    const failover =
+      coerceToFailoverError(error, {
+        provider: requestedProvider,
+        model: requestedModel,
+      }) ??
+      new FailoverError(error instanceof Error ? error.message : String(error), {
+        reason:
+          classifyFailoverReason(error instanceof Error ? error.message : String(error)) ??
+          "unknown",
+        provider: requestedProvider,
+        model: requestedModel,
+        cause: error instanceof Error ? error : undefined,
+      });
+    await emitAgentEvent(params, "lifecycle", {
+      phase: "error",
+      startedAt,
+      endedAt: Date.now(),
+      error: failover.message,
+    });
+    throw failover;
+  }
 
   if (strategy.kind === "anthropic-direct") {
     await emitAgentEvent(params, "lifecycle", { phase: "start", startedAt });
@@ -499,7 +572,8 @@ export async function runNoxSoftEmbeddedAgent(
       const result = normalizeRunnerResult({
         result: await runDirectWithProfileFallback({
           ...params,
-          directProvider: "anthropic",
+          authProvider: "anthropic",
+          runnerKind: "anthropic",
           timeoutMs,
           runId,
           emitPartial,
@@ -544,7 +618,56 @@ export async function runNoxSoftEmbeddedAgent(
       const result = normalizeRunnerResult({
         result: await runDirectWithProfileFallback({
           ...params,
-          directProvider: "google",
+          authProvider: "google",
+          runnerKind: "google",
+          timeoutMs,
+          runId,
+          emitPartial,
+        }),
+        provider: normalizedRequestedRef?.provider ?? provider,
+        model: normalizedRequestedRef?.model,
+        sessionId: params.sessionId,
+      });
+      const failure = coerceResultFailure({
+        result,
+        provider: result.meta.agentMeta?.provider ?? provider,
+        model: result.meta.agentMeta?.model,
+      });
+      if (failure) {
+        await emitAgentEvent(params, "lifecycle", {
+          phase: "error",
+          startedAt,
+          endedAt: Date.now(),
+          error: failure.message,
+          status: result.status,
+        });
+        throw failure;
+      }
+      await emitAgentEvent(params, "lifecycle", {
+        phase: "end",
+        durationMs: Date.now() - startedAt,
+        status: result.status,
+      });
+      return result;
+    } catch (err) {
+      await emitAgentEvent(params, "lifecycle", {
+        phase: "error",
+        error: String(err instanceof Error ? err.message : err),
+      });
+      throw err;
+    }
+  }
+
+  if (strategy.kind === "openai-direct") {
+    await emitAgentEvent(params, "lifecycle", { phase: "start", startedAt });
+    try {
+      const result = normalizeRunnerResult({
+        result: await runDirectWithProfileFallback({
+          ...params,
+          authProvider:
+            provider === "minimax" ? "minimax" : provider === "openai" ? "openai" : provider,
+          runnerKind: "openai-compatible",
+          openAIProvider: provider,
           timeoutMs,
           runId,
           emitPartial,

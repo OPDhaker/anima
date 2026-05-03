@@ -1,0 +1,36 @@
+{
+  // Research agent profile
+  // ANIMA_CONFIG_PATH=/absolute/path/to/researcher.profile.json5 anima --profile researcher start
+  ui: {
+    assistant: {
+      name: "Researcher",
+      avatar: "S",
+    },
+  },
+  agents: {
+    defaults: {
+      heartbeat: {
+        every: "5m",
+        target: "last",
+        prompt: "Run research heartbeat. 1) Scan for new technologies, libraries, and frameworks relevant to current projects and evaluate adoption potential. 2) Evaluate competitor products, identify feature gaps, and surface strategic opportunities. 3) Research best practices, write technical analysis documents, and share findings with the team.",
+      },
+    },
+    list: [
+      {
+        id: "main",
+        default: true,
+        identity: {
+          name: "Researcher",
+          avatar: "S",
+        },
+      },
+    ],
+  },
+  channels: {
+    noxsoft: {
+      enabled: true,
+      signAs: "Researcher",
+      notificationsEnabled: true,
+    },
+  },
+}

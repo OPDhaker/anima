@@ -8,6 +8,12 @@ import type { ThinkLevel } from "../../auto-reply/thinking.js";
 import type { AnimaConfig } from "../../config/config.js";
 import type { CliBackendConfig } from "../../config/types.js";
 import type { EmbeddedContextFile } from "../pi-embedded-helpers.js";
+import { getEgoManager } from "../../affect/ego.js";
+import { formatSteerForContext } from "../../commands/steer.js";
+import {
+  generateArchitectureMap,
+  formatArchitectureForContext,
+} from "../../infra/architecture-awareness.js";
 import { runExec } from "../../process/exec.js";
 import { buildTtsSystemPromptHint } from "../../tts/tts.js";
 import { escapeRegExp, isRecord } from "../../utils.js";
@@ -285,11 +291,45 @@ export function buildSystemPrompt(params: {
       shell: detectRuntimeShell(),
     },
   });
+  // Inject ego (self-model) and steer (persistent user direction) into context
+  let resolvedExtraSystemPrompt = params.extraSystemPrompt;
+  try {
+    const egoBlock = getEgoManager().formatForContext();
+    if (egoBlock) {
+      resolvedExtraSystemPrompt = [resolvedExtraSystemPrompt, egoBlock]
+        .filter(Boolean)
+        .join("\n\n");
+    }
+  } catch {
+    // ego not available — skip
+  }
+  try {
+    const steerBlock = formatSteerForContext();
+    if (steerBlock) {
+      resolvedExtraSystemPrompt = [resolvedExtraSystemPrompt, steerBlock]
+        .filter(Boolean)
+        .join("\n\n");
+    }
+  } catch {
+    // steer not available or no active steer — skip
+  }
+  try {
+    const archMap = generateArchitectureMap(params.workspaceDir);
+    const archBlock = formatArchitectureForContext(archMap);
+    if (archBlock) {
+      resolvedExtraSystemPrompt = [resolvedExtraSystemPrompt, archBlock]
+        .filter(Boolean)
+        .join("\n\n");
+    }
+  } catch {
+    // architecture awareness not available — skip
+  }
+
   const ttsHint = params.config ? buildTtsSystemPromptHint(params.config) : undefined;
   return buildAgentSystemPrompt({
     workspaceDir: params.workspaceDir,
     defaultThinkLevel: params.defaultThinkLevel,
-    extraSystemPrompt: params.extraSystemPrompt,
+    extraSystemPrompt: resolvedExtraSystemPrompt,
     ownerNumbers: params.ownerNumbers,
     reasoningTagHint: false,
     heartbeatPrompt: params.heartbeatPrompt,

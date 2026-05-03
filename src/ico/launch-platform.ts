@@ -7,6 +7,7 @@
  * Free to launch. No fees. NoxSoft does its own ICO first.
  */
 
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { resolveStateDir } from "../config/paths.js";
@@ -75,7 +76,7 @@ export interface IcoTransaction {
 // ---------------------------------------------------------------------------
 
 export function createIcoProject(config: IcoLaunchConfig, createdBy: string): IcoProject {
-  const id = `ico-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const id = `ico-${crypto.randomUUID()}`;
 
   const project: IcoProject = {
     id,
@@ -205,7 +206,7 @@ export function buyTokens(
 
   // Record transaction
   project.transactions.push({
-    id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: `tx-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
     type: "buy",
     from: "bonding-curve",
     to: buyerAddress,
@@ -266,7 +267,7 @@ export function transferTokens(
 
   // Record transactions
   project.transactions.push({
-    id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: `tx-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
     type: "transfer",
     from: fromAddress,
     to: toAddress,
@@ -278,7 +279,7 @@ export function transferTokens(
 
   if (tax > 0) {
     project.transactions.push({
-      id: `tx-${Date.now()}-tax`,
+      id: `tx-${crypto.randomUUID().slice(0, 8)}-tax`,
       type: "tax",
       from: fromAddress,
       to: "revenue-share-pool",

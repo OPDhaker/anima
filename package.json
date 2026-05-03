@@ -1,6 +1,6 @@
 {
   "name": "@noxsoft/anima",
-  "version": "6.5.0",
+  "version": "8.0.0",
   "description": "AI life system — persistent identity, sovereign memory, heartbeat-driven existence — by NoxSoft",
   "keywords": [
     "agent",
@@ -25,6 +25,7 @@
   "files": [
     "anima.mjs",
     "dist/",
+    "scripts/install-local-qwen3-coder.sh",
     "templates/",
     "skills/",
     "docs/reference/templates/",
@@ -89,13 +90,17 @@
     "mac:open": "open dist/Anima.app",
     "mac:package": "bash scripts/package-mac-app.sh",
     "mac:restart": "bash scripts/restart-mac.sh",
+    "models:local:install": "bash scripts/install-local-qwen3-coder.sh",
     "plugins:sync": "node --import tsx scripts/sync-plugin-versions.ts",
+    "postversion": "git push origin --all; git push origin --tags",
     "prepack": "pnpm build && pnpm ui:build",
     "prepare": "command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git config core.hooksPath git-hooks || exit 0",
     "prepublishOnly": "pnpm build",
+    "preversion": "npm test",
     "protocol:check": "pnpm protocol:gen && pnpm protocol:gen:swift && git diff --exit-code -- dist/protocol.schema.json apps/macos/Sources/AnimaProtocol/GatewayModels.swift",
     "protocol:gen": "node --import tsx scripts/protocol-gen.ts",
     "protocol:gen:swift": "node --import tsx scripts/protocol-gen-swift.ts",
+    "release": "npm version patch && npm publish",
     "release:check": "node --import tsx scripts/release-check.ts",
     "start": "node scripts/run-node.mjs",
     "test": "node scripts/test-parallel.mjs",
@@ -160,7 +165,7 @@
     "qrcode-terminal": "^0.12.0",
     "sharp": "^0.34.5",
     "sqlite-vec": "0.1.7-alpha.2",
-    "tar": "7.5.7",
+    "tar": "7.5.8",
     "tslog": "^4.10.2",
     "undici": "^7.22.0",
     "ws": "^8.19.0",
@@ -198,12 +203,13 @@
   "pnpm": {
     "minimumReleaseAge": 2880,
     "overrides": {
-      "fast-xml-parser": "5.3.4",
+      "fast-xml-parser": ">=5.3.8",
       "form-data": "2.5.4",
       "qs": "6.14.2",
       "@sinclair/typebox": "0.34.48",
-      "tar": "7.5.7",
-      "tough-cookie": "4.1.3"
+      "tar": ">=7.5.8",
+      "tough-cookie": "4.1.3",
+      "undici": ">=7.24.0"
     },
     "onlyBuiltDependencies": [
       "@lydell/node-pty",

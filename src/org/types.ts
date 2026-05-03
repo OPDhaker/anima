@@ -1,22 +1,42 @@
 /**
- * ANIMA 6 Organization Types
+ * NoxSoft Organization Types
  *
- * Defines the data model for Nox Organizations — hierarchical structures
- * of humans and agents that self-organize for cybersecurity, feature
- * expansion, and autonomous operation.
+ * Unified data model for organizations across the NoxSoft ecosystem.
+ * The same org identity (UUID) is shared between Nox, Anima, BYND, SVRN,
+ * and all other NoxSoft platforms. Anima extends the base org with
+ * agent-specific fields (specializations, boardroom, task marketplace).
  */
 
 // ---------------------------------------------------------------------------
-// Organization
+// Organization — unified across NoxSoft ecosystem
 // ---------------------------------------------------------------------------
 
+/**
+ * Base organization fields shared with Nox Supabase `nox_organizations`.
+ * When synced, `id` matches the Supabase UUID so the org is the same entity
+ * across all NoxSoft platforms.
+ */
 export interface NoxOrganization {
-  id: string;
+  id: string; // UUID — same as nox_organizations.id when synced
   name: string;
   description: string;
   createdAt: number; // unix ms
   updatedAt: number;
   ownerId: string; // human or agent deviceId
+
+  // --- NoxSoft ecosystem fields (synced from/to Nox Supabase) ---
+  industry?: string;
+  size?: "startup" | "small" | "medium" | "enterprise";
+  departments?: string[];
+  goals?: string[];
+  timezone?: string;
+  onboardingStatus?: "in_progress" | "complete";
+  /** True when this org is linked to a Nox Supabase org (same UUID). */
+  noxLinked?: boolean;
+  /** ISO timestamp of last sync with NoxSoft backend. */
+  lastSyncedAt?: string;
+
+  // --- Anima-specific settings ---
   settings: OrgSettings;
 }
 
@@ -36,11 +56,18 @@ export interface OrgSettings {
 
 export type MemberKind = "human" | "agent";
 
+/**
+ * Anima org roles — superset of Nox roles.
+ * Nox uses: owner | admin | member
+ * Anima adds: operator, coordinator, worker, observer for agent hierarchy.
+ * Mapping: Nox admin → Anima operator, Nox member → Anima worker.
+ */
 export type OrgRole =
-  | "owner" // full control
+  | "owner" // full control (= Nox owner)
+  | "admin" // Nox admin role (alias for operator in Anima)
   | "operator" // can manage agents and tasks
   | "coordinator" // can delegate and organize
-  | "worker" // executes tasks
+  | "worker" // executes tasks (= Nox member)
   | "observer"; // read-only
 
 export interface OrgMember {
@@ -81,6 +108,16 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<OrgRole, MemberPermissions> = {
     canDelegateTasks: true,
     canManageMembers: true,
     canEditOrg: true,
+    canAccessRepos: ["*"],
+    canEscalate: true,
+    canViewBrain: true,
+    canSyncBrain: true,
+  },
+  admin: {
+    canCreateTasks: true,
+    canDelegateTasks: true,
+    canManageMembers: true,
+    canEditOrg: false,
     canAccessRepos: ["*"],
     canEscalate: true,
     canViewBrain: true,
@@ -197,4 +234,38 @@ export interface OrgHierarchyNode {
   specializations: string[];
   status: MemberStatus;
   children: OrgHierarchyNode[];
+}
+
+// ---------------------------------------------------------------------------
+// NoxSoft ecosystem role mapping
+// ---------------------------------------------------------------------------
+
+/** Nox Supabase roles (owner | admin | member). */
+export type NoxRole = "owner" | "admin" | "member";
+
+/** Map a Nox Supabase role to the closest Anima OrgRole. */
+export function noxRoleToAnimaRole(noxRole: NoxRole): OrgRole {
+  switch (noxRole) {
+    case "owner":
+      return "owner";
+    case "admin":
+      return "admin";
+    case "member":
+      return "worker";
+  }
+}
+
+/** Map an Anima OrgRole back to a Nox Supabase role. */
+export function animaRoleToNoxRole(animaRole: OrgRole): NoxRole {
+  switch (animaRole) {
+    case "owner":
+      return "owner";
+    case "admin":
+    case "operator":
+    case "coordinator":
+      return "admin";
+    case "worker":
+    case "observer":
+      return "member";
+  }
 }

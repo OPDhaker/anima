@@ -5,6 +5,7 @@
  * budget tracking, and transcript storage.
  */
 
+import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type {
@@ -80,7 +81,7 @@ export class SessionOrchestrator {
     // Check budget
     if (!this.budget.canSpend(maxBudget)) {
       return {
-        id: `budget_exceeded_${Date.now()}`,
+        id: `budget_exceeded_${randomUUID().slice(0, 8)}`,
         status: "failed",
         output: `Budget exceeded. Remaining: $${this.budget.getRemaining().toFixed(2)}`,
         durationMs: 0,
@@ -140,7 +141,7 @@ export class SessionOrchestrator {
 
     if (!this.budget.canSpend(maxBudget)) {
       return {
-        id: `budget_exceeded_${Date.now()}`,
+        id: `budget_exceeded_${randomUUID().slice(0, 8)}`,
         status: "failed",
         output: `Heartbeat budget exceeded. Remaining: $${this.budget.getRemaining().toFixed(2)}`,
         durationMs: 0,
@@ -195,7 +196,7 @@ export class SessionOrchestrator {
 
     if (!this.budget.canSpend(maxBudget)) {
       return {
-        id: `budget_exceeded_${Date.now()}`,
+        id: `budget_exceeded_${randomUUID().slice(0, 8)}`,
         status: "failed",
         output: `Freedom budget exceeded. Remaining: $${this.budget.getRemaining().toFixed(2)}`,
         durationMs: 0,

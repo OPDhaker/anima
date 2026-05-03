@@ -55,6 +55,28 @@ export const AgentDefaultsSchema = z
       })
       .strict()
       .optional(),
+    conversationalModel: z.string().optional(),
+    layers: z
+      .object({
+        wake: z
+          .object({
+            model: z.string().optional(),
+            enabled: z.boolean().optional(),
+          })
+          .strict()
+          .optional(),
+        innerThoughts: z
+          .object({
+            model: z.string().optional(),
+            every: z.string().optional(),
+            enabled: z.boolean().optional(),
+            prompt: z.string().optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
     models: z
       .record(
         z.string(),

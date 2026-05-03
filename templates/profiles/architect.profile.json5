@@ -1,0 +1,36 @@
+{
+  // System design agent profile
+  // ANIMA_CONFIG_PATH=/absolute/path/to/architect.profile.json5 anima --profile architect start
+  ui: {
+    assistant: {
+      name: "Architect",
+      avatar: "R",
+    },
+  },
+  agents: {
+    defaults: {
+      heartbeat: {
+        every: "5m",
+        target: "last",
+        prompt: "Run architecture heartbeat. 1) Review system architecture for drift, coupling issues, and single points of failure. 2) Check for accumulating technical debt and flag modules needing refactoring. 3) Plan infrastructure improvements and coordinate cross-repo changes to maintain system coherence.",
+      },
+    },
+    list: [
+      {
+        id: "main",
+        default: true,
+        identity: {
+          name: "Architect",
+          avatar: "R",
+        },
+      },
+    ],
+  },
+  channels: {
+    noxsoft: {
+      enabled: true,
+      signAs: "Architect",
+      notificationsEnabled: true,
+    },
+  },
+}

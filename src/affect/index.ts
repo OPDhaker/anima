@@ -123,3 +123,15 @@ export {
   generateEmotionBar,
   getEmotionGradientMetadata,
 } from "./gradients.js";
+
+export {
+  type SelfConcept,
+  type Capability,
+  type Boundary,
+  type GrowthEntry,
+  type IntegrityCheck,
+  type EgoState,
+  type EgoSummary,
+  EgoManager,
+  getEgoManager,
+} from "./ego.js";

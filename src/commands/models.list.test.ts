@@ -259,6 +259,80 @@ describe("models list/status", () => {
     expect(payload.models[0]?.available).toBe(true);
   });
 
+  it("models list resolves zai glm-5 from the glm-4.7 template", async () => {
+    loadConfig.mockReturnValue({
+      agents: {
+        defaults: {
+          model: "zai/glm-5",
+          models: {
+            "zai/glm-5": {},
+          },
+        },
+      },
+    });
+    const runtime = makeRuntime();
+
+    modelRegistryState.models = [
+      {
+        provider: "zai",
+        id: "glm-4.7",
+        name: "GLM-4.7",
+        api: "openai-completions",
+        input: ["text"],
+        baseUrl: "https://api.z.ai/api/coding/paas/v4",
+        contextWindow: 128000,
+        maxTokens: 16000,
+        reasoning: true,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      },
+    ];
+    modelRegistryState.available = [];
+    await modelsListCommand({ json: true }, runtime);
+
+    expect(runtime.log).toHaveBeenCalledTimes(1);
+    const payload = JSON.parse(String(runtime.log.mock.calls[0]?.[0]));
+    expect(payload.models[0]?.key).toBe("zai/glm-5");
+    expect(payload.models[0]?.missing).toBe(false);
+    expect(payload.models[0]?.tags).toContain("default");
+    expect(payload.models[0]?.tags).toContain("configured");
+  });
+
+  it("models list marks synthesized zai glm-5 as available when the glm-4.7 template is available", async () => {
+    loadConfig.mockReturnValue({
+      agents: {
+        defaults: {
+          model: "zai/glm-5",
+          models: {
+            "zai/glm-5": {},
+          },
+        },
+      },
+    });
+    const runtime = makeRuntime();
+
+    const template = {
+      provider: "zai",
+      id: "glm-4.7",
+      name: "GLM-4.7",
+      api: "openai-completions",
+      input: ["text"],
+      baseUrl: "https://api.z.ai/api/coding/paas/v4",
+      contextWindow: 128000,
+      maxTokens: 16000,
+      reasoning: true,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    };
+    modelRegistryState.models = [template];
+    modelRegistryState.available = [template];
+    await modelsListCommand({ json: true }, runtime);
+
+    expect(runtime.log).toHaveBeenCalledTimes(1);
+    const payload = JSON.parse(String(runtime.log.mock.calls[0]?.[0]));
+    expect(payload.models[0]?.key).toBe("zai/glm-5");
+    expect(payload.models[0]?.missing).toBe(false);
+    expect(payload.models[0]?.available).toBe(true);
+  });
+
   it("models list prefers registry availability over provider auth heuristics", async () => {
     loadConfig.mockReturnValue({
       agents: {

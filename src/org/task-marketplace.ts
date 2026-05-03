@@ -10,6 +10,7 @@
  *   Guardian spots vuln → posts task → Builder claims → ships fix → Architect reviews
  */
 
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { resolveStateDir } from "../config/paths.js";
@@ -109,8 +110,17 @@ function resolveMarketplaceDir(): string {
   return path.join(resolveStateDir(), "task-marketplace");
 }
 
+/** Sanitize an ID to prevent path traversal (allow alphanumeric, hyphens, underscores only) */
+function sanitizeId(id: string): string {
+  const cleaned = id.replace(/[^a-zA-Z0-9_-]/g, "");
+  if (!cleaned || cleaned !== id) {
+    throw new Error(`Invalid task ID: contains disallowed characters`);
+  }
+  return cleaned;
+}
+
 function resolveTaskFile(id: string): string {
-  return path.join(resolveMarketplaceDir(), `${id}.json`);
+  return path.join(resolveMarketplaceDir(), `${sanitizeId(id)}.json`);
 }
 
 function readTask(id: string): MarketplaceTask | null {
@@ -146,7 +156,7 @@ export function postTask(
     tags?: string[];
   },
 ): MarketplaceTask {
-  const id = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const id = `task-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
   const now = Date.now();
 
   const task: MarketplaceTask = {
